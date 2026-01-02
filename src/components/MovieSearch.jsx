@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import axios from 'axios';
-import { PlusCircle, Loader2, CheckCircle, Film, Search, Filter, X, Info, XCircle, Grid3x3, List, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PlusCircle, Loader2, CheckCircle, Film, Search, Filter, X, Info, XCircle, Grid3x3, List, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Moon, Sun, Bookmark, Eye } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import toast from 'react-hot-toast';
+import { useTheme } from '../contexts/ThemeContext';
 
 const MovieSearch = () => {
+  const { isDark, toggleTheme } = useTheme();
   const [loading, setLoading] = useState(false);
   const [watchlist, setWatchlist] = useState([]);
+  const [watchedMovies, setWatchedMovies] = useState(new Set()); // Set de IDs de filmes assistidos
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [totalPages, setTotalPages] = useState(1);
@@ -20,6 +24,13 @@ const MovieSearch = () => {
   const [sortBy, setSortBy] = useState('popularity.desc');
   const [isSearchMode, setIsSearchMode] = useState(false);
   
+  // Novos filtros client-side
+  const [filterInList, setFilterInList] = useState(false);
+  const [filterWatched, setFilterWatched] = useState(false);
+  const [selectedCountry, setSelectedCountry] = useState('');
+  const [countries, setCountries] = useState([]);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+  
   // Estados do modal de detalhes
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [movieDetails, setMovieDetails] = useState(null);
@@ -32,10 +43,11 @@ const MovieSearch = () => {
   const searchTimeoutRef = useRef(null);
   const abortControllerRef = useRef(null);
 
-  // Carregar a watchlist e gêneros quando o componente monta
+  // Carregar a watchlist, gêneros e países quando o componente monta
   useEffect(() => {
     fetchWatchlist();
     fetchGenres();
+    fetchCountries();
     loadMovies(1);
   }, []);
 
@@ -53,17 +65,45 @@ const MovieSearch = () => {
     }
   };
 
-  const fetchWatchlist = async () => {
-    const { data, error } = await supabase
-      .from('watchlist')
-      .select('movie_id');
-    
-    if (!error && data) {
-      setWatchlist(data.map(item => item.movie_id));
+  const fetchCountries = async () => {
+    try {
+      const response = await axios.get(`https://api.themoviedb.org/3/configuration/countries`, {
+        params: {
+          api_key: import.meta.env.VITE_TMDB_API_KEY,
+          language: 'pt-BR'
+        }
+      });
+      // Ordenar países por nome
+      const sortedCountries = response.data.sort((a, b) => a.english_name.localeCompare(b.english_name));
+      setCountries(sortedCountries);
+    } catch (err) {
+      console.error("Erro ao carregar países:", err);
     }
   };
 
-  const loadMovies = async (pageNum = 1, reset = false, searchTerm = null, genreFilter = null, yearFilter = null, sortFilter = null) => {
+  const fetchWatchlist = async () => {
+    const { data, error } = await supabase
+      .from('watchlist')
+      .select('movie_id, status');
+    
+    if (!error && data) {
+      // Filmes que aparecem na lista: status = 'listed' ou 'both'
+      setWatchlist(
+        data
+          .filter(item => item.status === 'listed' || item.status === 'both')
+          .map(item => item.movie_id)
+      );
+      // Filmes assistidos: status = 'watched' ou 'both'
+      const watched = new Set(
+        data
+          .filter(item => item.status === 'watched' || item.status === 'both')
+          .map(item => item.movie_id)
+      );
+      setWatchedMovies(watched);
+    }
+  };
+
+  const loadMovies = async (pageNum = 1, reset = false, searchTerm = null, genreFilter = null, yearFilter = null, sortFilter = null, countryFilter = null) => {
     // Cancelar requisição anterior se existir
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -81,6 +121,7 @@ const MovieSearch = () => {
       const genreToUse = genreFilter !== null ? genreFilter : selectedGenre;
       const yearToUse = yearFilter !== null ? yearFilter : selectedYear;
       const sortToUse = sortFilter !== null ? sortFilter : sortBy;
+      const countryToUse = countryFilter !== null ? countryFilter : selectedCountry;
       
       // Sempre carregar 50 páginas por vez (1000 filmes)
       const maxPages = 50;
@@ -152,6 +193,11 @@ const MovieSearch = () => {
                 if (sortToUse === 'release_date.desc') {
                   const today = new Date().toISOString().split('T')[0];
                   params['primary_release_date.lte'] = today;
+                }
+                
+                // Filtro de país (nacionalidade)
+                if (countryToUse) {
+                  params.with_origin_country = countryToUse;
                 }
                 
                 response = await axios.get(`https://api.themoviedb.org/3/discover/movie`, { 
@@ -287,17 +333,46 @@ const MovieSearch = () => {
     }
   };
 
+  // Funções auxiliares (precisam estar antes do useMemo que as usa)
+  const isInWatchlist = (movieId) => {
+    return watchlist.includes(movieId);
+  };
+
+  const isWatched = (movieId) => {
+    return watchedMovies.has(movieId);
+  };
+
+  // Filtrar filmes client-side baseado nos novos filtros
+  const clientFilteredMovies = useMemo(() => {
+    let filtered = allFilteredMovies;
+
+    // Filtro: apenas na lista
+    if (filterInList) {
+      filtered = filtered.filter(movie => isInWatchlist(movie.id));
+    }
+
+    // Filtro: apenas assistidos
+    if (filterWatched) {
+      filtered = filtered.filter(movie => isWatched(movie.id));
+    }
+
+    // Filtro: nacionalidade já é aplicado na API via with_origin_country
+    // Não precisa filtrar client-side novamente
+
+    return filtered;
+  }, [allFilteredMovies, filterInList, filterWatched, watchlist, watchedMovies]);
+
   // Calcular filmes a exibir na página atual (paginação client-side)
   const currentPageMovies = useMemo(() => {
     const startIndex = (page - 1) * moviesPerPage;
     const endIndex = startIndex + moviesPerPage;
-    return allFilteredMovies.slice(startIndex, endIndex);
-  }, [allFilteredMovies, page, moviesPerPage]);
+    return clientFilteredMovies.slice(startIndex, endIndex);
+  }, [clientFilteredMovies, page, moviesPerPage]);
 
-  // Calcular total de páginas baseado nos filmes filtrados
+  // Calcular total de páginas baseado nos filmes filtrados (client-side)
   const totalPagesFiltered = useMemo(() => {
-    return Math.ceil(allFilteredMovies.length / moviesPerPage);
-  }, [allFilteredMovies.length, moviesPerPage]);
+    return Math.ceil(clientFilteredMovies.length / moviesPerPage);
+  }, [clientFilteredMovies.length, moviesPerPage]);
 
   // Atualizar totalPages quando os filmes filtrados mudarem
   useEffect(() => {
@@ -377,7 +452,7 @@ const MovieSearch = () => {
     };
   }, []);
 
-  const handleFilterChange = (newGenre = null, newYear = null, newSortBy = null) => {
+  const handleFilterChange = (newGenre = null, newYear = null, newSortBy = null, newCountry = null) => {
     setIsSearchMode(false);
     setPage(1);
     
@@ -385,9 +460,15 @@ const MovieSearch = () => {
     if (newGenre !== null) setSelectedGenre(newGenre);
     if (newYear !== null) setSelectedYear(newYear);
     if (newSortBy !== null) setSortBy(newSortBy);
+    if (newCountry !== null) setSelectedCountry(newCountry);
     
     // Carregar filmes com os valores passados diretamente (não esperar atualização do estado)
-    loadMovies(1, true, null, newGenre !== null ? newGenre : selectedGenre, newYear !== null ? newYear : selectedYear, newSortBy !== null ? newSortBy : sortBy);
+    loadMovies(1, true, null, 
+      newGenre !== null ? newGenre : selectedGenre, 
+      newYear !== null ? newYear : selectedYear, 
+      newSortBy !== null ? newSortBy : sortBy,
+      newCountry !== null ? newCountry : selectedCountry
+    );
   };
 
   const clearFilters = () => {
@@ -405,31 +486,193 @@ const MovieSearch = () => {
   const addToWatchlist = async (movie) => {
     // Verificar se o filme já está na lista
     if (watchlist.includes(movie.id)) {
-      alert(`"${movie.title}" já está na sua lista!`);
+      toast(`"${movie.title}" já está na sua lista!`, {
+        icon: 'ℹ️',
+      });
       return;
     }
 
-    const { error } = await supabase
+    // Verificar se o filme já existe na tabela
+    const { data: existing } = await supabase
       .from('watchlist')
-      .insert([
-        { 
-          movie_id: movie.id, 
-          title: movie.title, 
-          poster_path: movie.poster_path
-        }
-      ]);
+      .select('movie_id, status')
+      .eq('movie_id', movie.id)
+      .single();
 
-    if (error) {
-        alert("Erro ao adicionar: " + error.message);
-    } else {
-        alert(`"${movie.title}" foi para sua lista!`);
-        // Atualizar a watchlist local
+    if (existing) {
+      // Se já existe e está apenas como 'watched', mudar para 'both'
+      // Se já existe e está como 'both', não fazer nada (já está na lista)
+      let newStatus = 'both';
+      if (existing.status === 'watched') {
+        newStatus = 'both';
+      } else if (existing.status === 'both') {
+        toast(`"${movie.title}" já está na sua lista!`, {
+          icon: 'ℹ️',
+        });
+        return;
+      }
+
+      const { error } = await supabase
+        .from('watchlist')
+        .update({ status: newStatus })
+        .eq('movie_id', movie.id);
+
+      if (error) {
+        toast.error("Erro ao adicionar: " + error.message);
+      } else {
+        toast.success(`"${movie.title}" adicionado à lista!`, {
+          icon: '✅',
+        });
         setWatchlist([...watchlist, movie.id]);
+      }
+    } else {
+      // Se não existe, inserir novo registro com status 'listed'
+      const { error } = await supabase
+        .from('watchlist')
+        .insert([
+          { 
+            movie_id: movie.id, 
+            title: movie.title, 
+            poster_path: movie.poster_path,
+            status: 'listed'
+          }
+        ]);
+
+      if (error) {
+        toast.error("Erro ao adicionar: " + error.message);
+      } else {
+        toast.success(`"${movie.title}" adicionado à lista!`, {
+          icon: '✅',
+        });
+        setWatchlist([...watchlist, movie.id]);
+      }
     }
   };
 
-  const isInWatchlist = (movieId) => {
-    return watchlist.includes(movieId);
+  const toggleWatched = async (movie) => {
+    const currentWatchedStatus = isWatched(movie.id);
+    const newWatchedStatus = !currentWatchedStatus;
+    const isInList = isInWatchlist(movie.id);
+
+    try {
+      // Verificar se o filme já existe na tabela
+      const { data: existing } = await supabase
+        .from('watchlist')
+        .select('movie_id, status')
+        .eq('movie_id', movie.id)
+        .single();
+
+      let newStatus;
+      
+      if (existing) {
+        // Determinar novo status baseado no estado atual
+        const currentStatus = existing.status || 'listed';
+        
+        if (newWatchedStatus) {
+          // Marcando como assistido
+          if (currentStatus === 'listed') {
+            newStatus = 'both'; // Estava só na lista, agora está na lista E assistido
+          } else {
+            newStatus = 'watched'; // Não estava na lista, agora só assistido
+          }
+        } else {
+          // Removendo de assistido
+          if (currentStatus === 'both') {
+            newStatus = 'listed'; // Estava na lista e assistido, agora só na lista
+          } else if (currentStatus === 'watched') {
+            // Estava só assistido, remover completamente
+            const { error } = await supabase
+              .from('watchlist')
+              .delete()
+              .eq('movie_id', movie.id);
+
+            if (error) {
+              console.error('Erro ao remover:', error);
+              toast.error(`Erro ao remover: ${error.message}`);
+              return;
+            }
+
+            // Atualizar localmente
+            const newWatchedSet = new Set(watchedMovies);
+            newWatchedSet.delete(movie.id);
+            setWatchedMovies(newWatchedSet);
+            
+            // Recarregar watchlist para garantir sincronização
+            await fetchWatchlist();
+            
+            toast.success(`"${movie.title}" removido dos assistidos!`, {
+              icon: '👁️',
+            });
+            return;
+          }
+        }
+
+        // Atualizar status
+        const { error } = await supabase
+          .from('watchlist')
+          .update({ status: newStatus })
+          .eq('movie_id', movie.id);
+
+        if (error) {
+          console.error('Erro ao atualizar status:', error);
+          toast.error(`Erro ao atualizar status: ${error.message}`);
+          return;
+        }
+      } else {
+        // Se não existe, criar registro com status 'watched'
+        newStatus = 'watched';
+        const { error } = await supabase
+          .from('watchlist')
+          .insert([
+            { 
+              movie_id: movie.id, 
+              title: movie.title, 
+              poster_path: movie.poster_path,
+              status: 'watched'
+            }
+          ]);
+
+        if (error) {
+          console.error('Erro ao marcar como assistido:', error);
+          toast.error(`Erro ao marcar como assistido: ${error.message}`);
+          return;
+        }
+      }
+
+      // Atualizar localmente para feedback imediato
+      const newWatchedSet = new Set(watchedMovies);
+      if (newWatchedStatus) {
+        newWatchedSet.add(movie.id);
+      } else {
+        newWatchedSet.delete(movie.id);
+      }
+      setWatchedMovies(newWatchedSet);
+
+      // Atualizar watchlist se necessário
+      if (newStatus === 'both' || newStatus === 'listed') {
+        if (!isInList) {
+          setWatchlist([...watchlist, movie.id]);
+        }
+      } else if (newStatus === 'watched' && isInList) {
+        // Se mudou para apenas 'watched', remover da lista visual
+        setWatchlist(watchlist.filter(id => id !== movie.id));
+      }
+      
+      // Recarregar watchlist para garantir sincronização
+      await fetchWatchlist();
+      
+      toast.success(
+        newWatchedStatus 
+          ? `"${movie.title}" marcado como assistido!` 
+          : `"${movie.title}" removido dos assistidos!`,
+        {
+          icon: newWatchedStatus ? '✅' : '👁️',
+        }
+      );
+    } catch (err) {
+      console.error('Erro inesperado ao atualizar status:', err);
+      toast.error(`Erro inesperado: ${err.message}`);
+    }
   };
 
   const fetchMovieDetails = async (movieId) => {
@@ -493,117 +736,203 @@ const MovieSearch = () => {
   return (
     <div className="p-4 max-w-6xl mx-auto">
       {/* Título do Catálogo */}
-      <div className="mb-6 flex items-center gap-2">
-        <Film className="text-blue-600" size={32} />
-        <h1 className="text-3xl font-bold text-gray-800">Catálogo de Filmes</h1>
+      <div className="mb-6 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Film className="text-blue-600 dark:text-blue-400" size={32} />
+          <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100">Catálogo de Filmes</h1>
+        </div>
+        {/* Botão de Toggle de Tema */}
+        <button
+          onClick={toggleTheme}
+          className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+          title={isDark ? 'Modo claro' : 'Modo escuro'}
+        >
+          {isDark ? <Sun size={20} /> : <Moon size={20} />}
+        </button>
       </div>
 
-      {/* Barra de Busca */}
-      <form onSubmit={handleSearch} className="relative mb-4">
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => {
-            setSearchQuery(e.target.value);
-            debouncedSearch(e.target.value);
-          }}
-          placeholder="Busque um filme..."
-          className="w-full p-4 pl-12 rounded-xl bg-gray-100 border-none focus:ring-2 focus:ring-blue-500 shadow-sm"
-        />
-        <Search className="absolute left-4 top-4 text-gray-400" size={20} />
-        <button 
-          type="submit"
-          className="absolute right-3 top-2.5 bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700 transition"
-        >
-          Buscar
-        </button>
-      </form>
-
-      {/* Controles de Visualização e Filtros */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6">
-        <div className="flex flex-wrap gap-4 items-end justify-between">
-          {/* Filtros à esquerda */}
-          <div className="flex flex-wrap gap-4 items-end">
-            <div className="flex items-center gap-2">
-              <Filter size={18} className="text-gray-400" />
-              <label className="text-sm text-gray-600">Gênero:</label>
-              <select 
-                value={selectedGenre}
-                onChange={(e) => {
-                  handleFilterChange(e.target.value, null, null);
-                }}
-                className="border-none bg-gray-50 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 min-w-[150px]"
-              >
-                <option value="">Todos</option>
-                {genres.map((genre) => (
-                  <option key={genre.id} value={genre.id}>{genre.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-600">Ano:</label>
-              <select 
-                value={selectedYear}
-                onChange={(e) => {
-                  handleFilterChange(null, e.target.value, null);
-                }}
-                className="border-none bg-gray-50 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 min-w-[120px]"
-              >
-                <option value="">Todos</option>
-                {Array.from({ length: 100 }, (_, i) => {
-                  const year = new Date().getFullYear() - i;
-                  return (
-                    <option key={year} value={year}>{year}</option>
-                  );
-                })}
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-600">Ordenar por:</label>
-              <select 
-                value={sortBy}
-                onChange={(e) => {
-                  handleFilterChange(null, null, e.target.value);
-                }}
-                className="border-none bg-gray-50 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 min-w-[180px]"
-              >
-                <option value="popularity.desc">Mais Populares</option>
-                <option value="vote_average.desc">Melhor Avaliados</option>
-                <option value="release_date.desc">Mais Recentes</option>
-                <option value="release_date.asc">Mais Antigos</option>
-                <option value="title.asc">Título (A-Z)</option>
-                <option value="title.desc">Título (Z-A)</option>
-              </select>
-            </div>
-
-          </div>
-
-          {/* Botões de Visualização à direita */}
-          <div className="flex items-center gap-2 bg-gray-50 rounded-lg p-1">
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-2 rounded transition ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-200'}`}
-              title="Visualização em Grid"
+      {/* Barra Unificada: Busca + Filtros + Visualização */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
+        {/* Linha superior: Busca + Controles */}
+        <div className="flex items-center gap-3 p-4 border-b border-gray-100 dark:border-gray-700">
+          {/* Busca */}
+          <form onSubmit={handleSearch} className="flex-1 relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                debouncedSearch(e.target.value);
+              }}
+              placeholder="Busque um filme..."
+              className="w-full p-3 pl-10 pr-20 rounded-lg bg-gray-100 dark:bg-gray-700 border-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+            />
+            <Search className="absolute left-3 top-3.5 text-gray-400 dark:text-gray-500" size={18} />
+            <button 
+              type="submit"
+              className="absolute right-2 top-2 bg-blue-600 dark:bg-blue-500 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition text-sm"
             >
-              <Grid3x3 size={20} />
+              Buscar
             </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-2 rounded transition ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-200'}`}
-              title="Visualização em Lista"
-            >
-              <List size={20} />
-            </button>
+          </form>
+
+          {/* Filtros e Visualização */}
+          <div className="flex items-center gap-3">
+            {/* Botão de Filtros */}
+            <div className="flex items-center gap-2">
+              <Filter size={18} className="text-gray-400 dark:text-gray-500" />
+              <button
+                onClick={() => setFiltersExpanded(!filtersExpanded)}
+                className="p-1.5 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition"
+                title={filtersExpanded ? 'Recolher filtros' : 'Expandir filtros'}
+              >
+                {filtersExpanded ? (
+                  <ChevronUp size={18} />
+                ) : (
+                  <ChevronDown size={18} />
+                )}
+              </button>
+            </div>
+
+            {/* Botões de Visualização */}
+            <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700 rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-2 rounded transition ${viewMode === 'grid' ? 'bg-blue-600 dark:bg-blue-500 text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                title="Visualização em Grid"
+              >
+                <Grid3x3 size={18} />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-2 rounded transition ${viewMode === 'list' ? 'bg-blue-600 dark:bg-blue-500 text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                title="Visualização em Lista"
+              >
+                <List size={18} />
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Filtros (recolhível) */}
+        {filtersExpanded && (
+          <div className="p-4 bg-gray-50 dark:bg-gray-900/50">
+            <div className="flex flex-nowrap items-center gap-3 overflow-x-auto">
+              {/* Gênero */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <label className="text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">Gênero:</label>
+                <select 
+                  value={selectedGenre}
+                  onChange={(e) => {
+                    handleFilterChange(e.target.value, null, null);
+                  }}
+                  className="border-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 min-w-[150px]"
+                >
+                  <option value="">Todos</option>
+                  {genres.map((genre) => (
+                    <option key={genre.id} value={genre.id}>{genre.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Ano */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <label className="text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">Ano:</label>
+                <select 
+                  value={selectedYear}
+                  onChange={(e) => {
+                    handleFilterChange(null, e.target.value, null);
+                  }}
+                  className="border-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 min-w-[120px]"
+                >
+                  <option value="">Todos</option>
+                  {Array.from({ length: 100 }, (_, i) => {
+                    const year = new Date().getFullYear() - i;
+                    return (
+                      <option key={year} value={year}>{year}</option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              {/* País */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <label className="text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">País:</label>
+                <select 
+                  value={selectedCountry}
+                  onChange={(e) => {
+                    handleFilterChange(null, null, null, e.target.value);
+                  }}
+                  className="border-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 w-[150px]"
+                >
+                  <option value="">Todos</option>
+                  {countries.map((country) => (
+                    <option key={country.iso_3166_1} value={country.iso_3166_1}>
+                      {country.english_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Ordenar por */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <label className="text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">Ordenar por:</label>
+                <select 
+                  value={sortBy}
+                  onChange={(e) => {
+                    handleFilterChange(null, null, e.target.value);
+                  }}
+                  className="border-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 min-w-[180px]"
+                >
+                  <option value="popularity.desc">Mais Populares</option>
+                  <option value="vote_average.desc">Melhor Avaliados</option>
+                  <option value="release_date.desc">Mais Recentes</option>
+                  <option value="release_date.asc">Mais Antigos</option>
+                  <option value="title.asc">Título (A-Z)</option>
+                  <option value="title.desc">Título (Z-A)</option>
+                </select>
+              </div>
+
+              {/* Botão: Na Lista */}
+              <button
+                onClick={() => {
+                  setFilterInList(!filterInList);
+                  setPage(1);
+                }}
+                className={`flex items-center justify-center p-2 rounded-lg transition flex-shrink-0 ${
+                  filterInList
+                    ? 'bg-blue-600 dark:bg-blue-500 text-white hover:bg-blue-700 dark:hover:bg-blue-600'
+                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
+                }`}
+                title="Filtrar filmes na lista"
+              >
+                <Bookmark size={18} />
+              </button>
+
+              {/* Botão: Assistido */}
+              <button
+                onClick={() => {
+                  setFilterWatched(!filterWatched);
+                  setPage(1);
+                }}
+                className={`flex items-center justify-center p-2 rounded-lg transition flex-shrink-0 ${
+                  filterWatched
+                    ? 'bg-green-600 dark:bg-green-500 text-white hover:bg-green-700 dark:hover:bg-green-600'
+                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
+                }`}
+                title="Filtrar filmes assistidos"
+              >
+                <Eye size={18} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Resultados */}
       {loading && allFilteredMovies.length === 0 ? (
         <div className="flex justify-center py-20">
-          <Loader2 className="animate-spin text-blue-500" size={48} />
+          <Loader2 className="animate-spin text-blue-500 dark:text-blue-400" size={48} />
         </div>
       ) : (
         <>
@@ -611,7 +940,7 @@ const MovieSearch = () => {
             // Visualização em Grid
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
               {currentPageMovies.map((movie) => (
-                <div key={movie.id} className="group relative bg-white rounded-lg overflow-hidden shadow-md hover:shadow-xl transition">
+                <div key={movie.id} className="group relative bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-md hover:shadow-xl transition">
                   <div className="relative h-80 overflow-hidden">
                     {movie.poster_path ? (
                       <img 
@@ -620,34 +949,39 @@ const MovieSearch = () => {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400 text-sm">Sem Foto</div>
+                      <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm">Sem Foto</div>
                     )}
-                    <button
-                      onClick={() => openMovieDetails(movie)}
-                      className="absolute top-2 right-2 bg-black/70 hover:bg-black/90 text-white p-2 rounded-full transition opacity-0 group-hover:opacity-100"
-                      title="Ver detalhes"
-                    >
-                      <Info size={18} />
-                    </button>
                   </div>
                   
                   <div className="p-3">
-                    <h3 className="font-bold text-sm truncate">{movie.title}</h3>
-                    <p className="text-xs text-gray-500">{movie.release_date?.split('-')[0]}</p>
+                    <h3 className="font-bold text-sm truncate text-gray-800 dark:text-gray-100">{movie.title}</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{movie.release_date?.split('-')[0]}</p>
                     
                     <div className="flex gap-2 mt-3">
                       <button
                         onClick={() => openMovieDetails(movie)}
-                        className="flex-1 flex items-center justify-center gap-1 bg-gray-100 text-gray-700 py-2 rounded-md hover:bg-gray-200 transition text-xs font-semibold"
+                        className="flex items-center justify-center p-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition"
+                        title="Ver detalhes"
                       >
                         <Info size={14} />
-                        Detalhes
+                      </button>
+                      
+                      <button
+                        onClick={() => toggleWatched(movie)}
+                        className={`flex items-center justify-center p-2 rounded-md transition ${
+                          isWatched(movie.id)
+                            ? 'bg-green-600 dark:bg-green-500 text-white hover:bg-green-700 dark:hover:bg-green-600'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                        }`}
+                        title={isWatched(movie.id) ? 'Marcado como assistido' : 'Marcar como assistido'}
+                      >
+                        <CheckCircle size={14} />
                       </button>
                       
                       {isInWatchlist(movie.id) ? (
                         <button 
                           disabled
-                          className="flex-1 flex items-center gap-1 justify-center bg-green-50 text-green-600 py-2 rounded-md border border-green-200 cursor-not-allowed text-xs font-semibold"
+                          className="flex-1 flex items-center gap-1 justify-center bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 py-2 rounded-md border border-green-200 dark:border-green-800 cursor-not-allowed text-xs font-semibold"
                         >
                           <CheckCircle size={14} />
                           Na Lista
@@ -655,7 +989,7 @@ const MovieSearch = () => {
                       ) : (
                         <button 
                           onClick={() => addToWatchlist(movie)}
-                          className="flex-1 flex items-center gap-1 justify-center bg-blue-50 text-blue-600 py-2 rounded-md hover:bg-blue-100 transition border border-blue-200 text-xs font-semibold"
+                          className="flex-1 flex items-center gap-1 justify-center bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 py-2 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/50 transition border border-blue-200 dark:border-blue-800 text-xs font-semibold"
                         >
                           <PlusCircle size={14} />
                           Adicionar
@@ -670,7 +1004,7 @@ const MovieSearch = () => {
             // Visualização em Lista Miniatura (3-4 filmes por linha)
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {currentPageMovies.map((movie) => (
-                <div key={movie.id} className="group bg-white rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition overflow-hidden">
+                <div key={movie.id} className="group bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition overflow-hidden">
                   <div className="flex">
                     {/* Poster Miniatura */}
                     <div className="relative w-20 h-28 flex-shrink-0">
@@ -681,15 +1015,15 @@ const MovieSearch = () => {
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400 text-xs">Sem Foto</div>
+                        <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-400 dark:text-gray-500 text-xs">Sem Foto</div>
                       )}
                     </div>
                     
                     {/* Informações */}
                     <div className="flex-1 p-3 flex flex-col justify-between min-w-0">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-sm truncate">{movie.title}</h3>
-                        <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                        <h3 className="font-bold text-sm truncate text-gray-800 dark:text-gray-100">{movie.title}</h3>
+                        <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 dark:text-gray-400">
                           {movie.release_date && (
                             <span>{movie.release_date.split('-')[0]}</span>
                           )}
@@ -705,16 +1039,28 @@ const MovieSearch = () => {
                       <div className="flex gap-2 mt-2">
                         <button
                           onClick={() => openMovieDetails(movie)}
-                          className="flex-1 flex items-center justify-center gap-1 bg-gray-100 text-gray-700 py-1.5 rounded-md hover:bg-gray-200 transition text-xs font-semibold"
+                          className="flex items-center justify-center p-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition"
+                          title="Ver detalhes"
                         >
                           <Info size={12} />
-                          Detalhes
+                        </button>
+                        
+                        <button
+                          onClick={() => toggleWatched(movie)}
+                          className={`flex items-center justify-center p-1.5 rounded-md transition ${
+                            isWatched(movie.id)
+                              ? 'bg-green-600 dark:bg-green-500 text-white hover:bg-green-700 dark:hover:bg-green-600'
+                              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                          }`}
+                          title={isWatched(movie.id) ? 'Marcado como assistido' : 'Marcar como assistido'}
+                        >
+                          <CheckCircle size={12} />
                         </button>
                         
                         {isInWatchlist(movie.id) ? (
                           <button 
                             disabled
-                            className="flex-1 flex items-center gap-1 justify-center bg-green-50 text-green-600 py-1.5 rounded-md border border-green-200 cursor-not-allowed text-xs font-semibold"
+                            className="flex-1 flex items-center gap-1 justify-center bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 py-1.5 rounded-md border border-green-200 dark:border-green-800 cursor-not-allowed text-xs font-semibold"
                           >
                             <CheckCircle size={12} />
                             Na Lista
@@ -722,7 +1068,7 @@ const MovieSearch = () => {
                         ) : (
                           <button 
                             onClick={() => addToWatchlist(movie)}
-                            className="flex-1 flex items-center gap-1 justify-center bg-blue-50 text-blue-600 py-1.5 rounded-md hover:bg-blue-100 transition border border-blue-200 text-xs font-semibold"
+                            className="flex-1 flex items-center gap-1 justify-center bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 py-1.5 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/50 transition border border-blue-200 dark:border-blue-800 text-xs font-semibold"
                           >
                             <PlusCircle size={12} />
                             Adicionar
@@ -740,8 +1086,8 @@ const MovieSearch = () => {
           {allFilteredMovies.length > 0 && (
             <div className="flex flex-col items-center gap-4 mt-8">
               {/* Informação de paginação */}
-              <div className="text-sm text-gray-600">
-                Página {page} de {totalPagesFiltered > 0 ? totalPagesFiltered : 1} • {allFilteredMovies.length} filme{allFilteredMovies.length !== 1 ? 's' : ''} encontrado{allFilteredMovies.length !== 1 ? 's' : ''} • Mostrando {currentPageMovies.length} de {allFilteredMovies.length}
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                Página {page} de {totalPagesFiltered > 0 ? totalPagesFiltered : 1} • {clientFilteredMovies.length} filme{clientFilteredMovies.length !== 1 ? 's' : ''} encontrado{clientFilteredMovies.length !== 1 ? 's' : ''} • Mostrando {currentPageMovies.length} de {clientFilteredMovies.length}
               </div>
               
               {/* Botões de navegação */}
@@ -749,7 +1095,7 @@ const MovieSearch = () => {
                 <button
                   onClick={goToPreviousPage}
                   disabled={loading || page === 1}
-                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                  className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-gray-700 dark:text-gray-300"
                 >
                   <ChevronLeft size={18} />
                   Anterior
@@ -776,8 +1122,8 @@ const MovieSearch = () => {
                         disabled={loading}
                         className={`w-10 h-10 rounded-lg font-medium transition ${
                           page === pageNum
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700'
+                            ? 'bg-blue-600 dark:bg-blue-500 text-white'
+                            : 'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
                         } disabled:opacity-50 disabled:cursor-not-allowed text-sm`}
                       >
                         {pageNum}
@@ -789,7 +1135,7 @@ const MovieSearch = () => {
                 <button
                   onClick={goToNextPage}
                   disabled={loading || page === totalPagesFiltered}
-                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                  className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-gray-700 dark:text-gray-300"
                 >
                   Próxima
                   <ChevronRight size={18} />
@@ -802,11 +1148,11 @@ const MovieSearch = () => {
 
       {/* Modal de Detalhes do Filme */}
       {selectedMovie && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={closeMovieDetails}>
-          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4" onClick={closeMovieDetails}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             {loadingDetails ? (
               <div className="flex justify-center items-center py-20">
-                <Loader2 className="animate-spin text-blue-500" size={48} />
+                <Loader2 className="animate-spin text-blue-500 dark:text-blue-400" size={48} />
               </div>
             ) : movieDetails ? (
               <div className="relative">
@@ -954,23 +1300,38 @@ const MovieSearch = () => {
                     </div>
                   )}
 
-                  {/* Botão de adicionar à lista */}
-                  <div className="mt-6 pt-6 border-t">
+                  {/* Botões de ação */}
+                  <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700 space-y-3">
                     {isInWatchlist(movieDetails.id) ? (
-                      <button 
-                        disabled
-                        className="w-full flex items-center justify-center gap-2 bg-green-50 text-green-600 py-3 rounded-lg border border-green-200 cursor-not-allowed font-semibold"
-                      >
-                        <CheckCircle size={20} />
-                        Já está na sua lista
-                      </button>
+                      <>
+                        <button 
+                          onClick={() => {
+                            toggleWatched(movieDetails);
+                          }}
+                          className={`w-full flex items-center justify-center gap-2 py-3 rounded-lg transition font-semibold ${
+                            isWatched(movieDetails.id)
+                              ? 'bg-green-600 dark:bg-green-500 text-white hover:bg-green-700 dark:hover:bg-green-600'
+                              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                          }`}
+                        >
+                          <CheckCircle size={20} />
+                          {isWatched(movieDetails.id) ? 'Marcado como Assistido' : 'Marcar como Assistido'}
+                        </button>
+                        <button 
+                          disabled
+                          className="w-full flex items-center justify-center gap-2 bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 py-3 rounded-lg border border-green-200 dark:border-green-800 cursor-not-allowed font-semibold"
+                        >
+                          <CheckCircle size={20} />
+                          Já está na sua lista
+                        </button>
+                      </>
                     ) : (
                       <button 
                         onClick={() => {
                           addToWatchlist(movieDetails);
                           closeMovieDetails();
                         }}
-                        className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-semibold"
+                        className="w-full flex items-center justify-center gap-2 bg-blue-600 dark:bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition font-semibold"
                       >
                         <PlusCircle size={20} />
                         Adicionar à Minha Lista

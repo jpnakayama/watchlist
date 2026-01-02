@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { Dices, Filter, Film, Calendar } from 'lucide-react';
+import { Dices, Filter, Film, Calendar, Moon, Sun } from 'lucide-react';
+import { useTheme } from '../contexts/ThemeContext';
 
 // Lista básica de géneros do TMDB (podes expandir depois)
 const GENRES = {
@@ -11,6 +12,7 @@ const GENRES = {
 };
 
 const MovieRandomizer = () => {
+  const { isDark, toggleTheme } = useTheme();
   const [watchlist, setWatchlist] = useState([]);
   const [filteredMovies, setFilteredMovies] = useState([]);
   const [selectedMovie, setSelectedMovie] = useState(null);
@@ -29,8 +31,15 @@ const MovieRandomizer = () => {
     setLoading(true);
     const { data, error } = await supabase.from('watchlist').select('*');
     if (!error) {
-      setWatchlist(data);
-      setFilteredMovies(data);
+      // Filtrar apenas filmes que estão na lista E não estão assistidos
+      // Status 'listed' = na lista e não assistido (pode ser sorteado)
+      // Status 'both' = na lista mas também assistido (não deve ser sorteado)
+      // Status 'watched' = apenas assistido, não na lista (não deve ser sorteado)
+      const availableMovies = (data || []).filter(movie => 
+        movie.status === 'listed'
+      );
+      setWatchlist(availableMovies);
+      setFilteredMovies(availableMovies);
     }
     setLoading(false);
   };
@@ -71,17 +80,27 @@ const MovieRandomizer = () => {
 
   return (
     <div className="p-6 max-w-4xl mx-auto text-center">
-      <h2 className="text-2xl font-bold mb-6 flex items-center justify-center gap-2">
-        <Dices className="text-purple-600" /> O que vamos ver hoje?
-      </h2>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-bold flex items-center gap-2 text-gray-800 dark:text-gray-100">
+          <Dices className="text-purple-600 dark:text-purple-400" /> O que vamos ver hoje?
+        </h2>
+        {/* Botão de Toggle de Tema */}
+        <button
+          onClick={toggleTheme}
+          className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+          title={isDark ? 'Modo claro' : 'Modo escuro'}
+        >
+          {isDark ? <Sun size={20} /> : <Moon size={20} />}
+        </button>
+      </div>
 
       {/* Painel de Filtros */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-8 flex flex-wrap gap-4 justify-center">
+      <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-8 flex flex-wrap gap-4 justify-center">
         <div className="flex items-center gap-2">
-          <Filter size={18} className="text-gray-400" />
+          <Filter size={18} className="text-gray-400 dark:text-gray-500" />
           <select 
             onChange={(e) => setGenreFilter(e.target.value)}
-            className="border-none bg-gray-50 rounded-lg p-2 text-sm focus:ring-2 focus:ring-purple-500"
+            className="border-none bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg p-2 text-sm focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400"
           >
             <option value="">Todos os Géneros</option>
             {Object.entries(GENRES).map(([id, name]) => (
@@ -91,12 +110,12 @@ const MovieRandomizer = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          <Calendar size={18} className="text-gray-400" />
+          <Calendar size={18} className="text-gray-400 dark:text-gray-500" />
           <input 
             type="number" 
             placeholder="Ano (ex: 2023)"
             onChange={(e) => setYearFilter(e.target.value)}
-            className="border-none bg-gray-50 rounded-lg p-2 text-sm w-32 focus:ring-2 focus:ring-purple-500"
+            className="border-none bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg p-2 text-sm w-32 focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400"
           />
         </div>
       </div>
@@ -105,7 +124,7 @@ const MovieRandomizer = () => {
       <button
         onClick={pickRandom}
         disabled={isRolling || loading}
-        className="bg-purple-600 text-white px-8 py-4 rounded-full font-bold text-lg shadow-lg hover:bg-purple-700 transition-all flex items-center gap-3 mx-auto active:scale-95 disabled:opacity-50"
+        className="bg-purple-600 dark:bg-purple-500 text-white px-8 py-4 rounded-full font-bold text-lg shadow-lg hover:bg-purple-700 dark:hover:bg-purple-600 transition-all flex items-center gap-3 mx-auto active:scale-95 disabled:opacity-50"
       >
         {isRolling ? "A escolher..." : "Sortear Filme"}
         <Dices />
@@ -115,25 +134,25 @@ const MovieRandomizer = () => {
       <div className="mt-12 min-h-[400px]">
         {selectedMovie && !isRolling && (
           <div className="animate-in fade-in zoom-in duration-500">
-            <div className="max-w-xs mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden border-4 border-purple-100">
+            <div className="max-w-xs mx-auto bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden border-4 border-purple-100 dark:border-purple-900">
               <img 
                 src={`https://image.tmdb.org/t/p/w500${selectedMovie.poster_path}`} 
                 alt={selectedMovie.title}
                 className="w-full h-auto"
               />
               <div className="p-4">
-                <h3 className="text-xl font-bold text-gray-800">{selectedMovie.title}</h3>
-                <p className="text-purple-600 font-medium">{selectedMovie.release_date?.split('-')[0]}</p>
+                <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">{selectedMovie.title}</h3>
+                <p className="text-purple-600 dark:text-purple-400 font-medium">{selectedMovie.release_date?.split('-')[0]}</p>
               </div>
             </div>
-            <p className="mt-4 text-gray-500 italic">Boa sessão! 🍿</p>
+            <p className="mt-4 text-gray-500 dark:text-gray-400 italic">Boa sessão! 🍿</p>
           </div>
         )}
         
         {!selectedMovie && !isRolling && (
-          <div className="text-gray-300 flex flex-col items-center gap-4 mt-20">
+          <div className="text-gray-300 dark:text-gray-600 flex flex-col items-center gap-4 mt-20">
             <Film size={64} />
-            <p>Tens {filteredMovies.length} filmes na lista com estes filtros.</p>
+            <p className="text-gray-600 dark:text-gray-400">Tens {filteredMovies.length} filmes na lista com estes filtros.</p>
           </div>
         )}
       </div>
