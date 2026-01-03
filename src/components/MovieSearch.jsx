@@ -37,7 +37,7 @@ const MovieSearch = () => {
   const [loadingDetails, setLoadingDetails] = useState(false);
   
   // Estado de visualização
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' ou 'list'
+  const [viewMode, setViewMode] = useState('list'); // 'grid' ou 'list'
   
   // Refs para controle de requisições
   const searchTimeoutRef = useRef(null);
