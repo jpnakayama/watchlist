@@ -1,13 +1,27 @@
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import MovieSearch from "./components/MovieSearch"; 
 import MovieRandomizer from "./components/MovieRandomizer";
-import Watchlist from './components/Watchlist'; 
+import Watchlist from './components/Watchlist';
+import Login from './components/Login';
+import ProtectedRoute from './components/ProtectedRoute';
 import { LayoutGrid, Dices, Film, Moon, Sun } from 'lucide-react';
 import { useTheme } from './contexts/ThemeContext';
+import { useAuth } from './contexts/AuthContext';
+import toast from 'react-hot-toast';
 
 function App() {
   const { isDark, toggleTheme } = useTheme();
+  const { user, signOut } = useAuth();
+
+  const handleLogout = async () => {
+    const { error } = await signOut();
+    if (error) {
+      toast.error('Erro ao fazer logout');
+    } else {
+      toast.success('Logout realizado com sucesso');
+    }
+  };
 
   return (
     <Router>
@@ -38,37 +52,64 @@ function App() {
         />
         
         <Routes>
-          <Route path="/" element={<MovieSearch />} />
-          <Route path="/sorteio" element={<MovieRandomizer />} />
-          <Route path="/lista" element={<Watchlist />} />
+          <Route 
+            path="/login" 
+            element={user ? <Navigate to="/" replace /> : <Login />} 
+          />
+          <Route 
+            path="/" 
+            element={
+              <ProtectedRoute>
+                <MovieSearch />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/sorteio" 
+            element={
+              <ProtectedRoute>
+                <MovieRandomizer />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/lista" 
+            element={
+              <ProtectedRoute>
+                <Watchlist />
+              </ProtectedRoute>
+            } 
+          />
         </Routes>
 
-        {/* Menu Inferior Estilo App Mobile */}
-        <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 py-3 flex items-end justify-center shadow-lg z-50">
-          {/* Container com os três botões */}
-          <div className="flex items-end justify-center gap-4 w-full max-w-md mx-auto px-4">
-            {/* Botão Catálogo */}
-            <Link to="/" className="flex flex-col items-center gap-1 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition pb-1">
-              <LayoutGrid size={24} />
-              <span className="text-xs font-medium">Catálogo</span>
-            </Link>
-            
-            {/* Botão Sortear em destaque - elevado */}
-            <Link 
-              to="/sorteio" 
-              className="flex flex-col items-center gap-1 bg-purple-600 dark:bg-purple-500 text-white rounded-full p-4 -mt-6 shadow-2xl hover:bg-purple-700 dark:hover:bg-purple-600 transition-all transform hover:scale-105 relative z-10"
-            >
-              <Dices size={28} />
-              <span className="text-xs font-semibold">Sortear</span>
-            </Link>
-            
-            {/* Botão Lista */}
-            <Link to="/lista" className="flex flex-col items-center gap-1 text-gray-500 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 transition pb-1">
-              <Film size={24} />
-              <span className="text-xs font-medium">Lista</span>
-            </Link>
-          </div>
-        </nav>
+        {/* Menu Inferior Estilo App Mobile - apenas quando autenticado */}
+        {user && (
+          <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 py-3 flex items-end justify-center shadow-lg z-50">
+            {/* Container com os três botões */}
+            <div className="flex items-end justify-center gap-4 w-full max-w-md mx-auto px-4">
+              {/* Botão Catálogo */}
+              <Link to="/" className="flex flex-col items-center gap-1 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition pb-1">
+                <LayoutGrid size={24} />
+                <span className="text-xs font-medium">Catálogo</span>
+              </Link>
+              
+              {/* Botão Sortear em destaque - elevado */}
+              <Link 
+                to="/sorteio" 
+                className="flex flex-col items-center gap-1 bg-purple-600 dark:bg-purple-500 text-white rounded-full p-4 -mt-6 shadow-2xl hover:bg-purple-700 dark:hover:bg-purple-600 transition-all transform hover:scale-105 relative z-10"
+              >
+                <Dices size={28} />
+                <span className="text-xs font-semibold">Sortear</span>
+              </Link>
+              
+              {/* Botão Lista */}
+              <Link to="/lista" className="flex flex-col items-center gap-1 text-gray-500 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 transition pb-1">
+                <Film size={24} />
+                <span className="text-xs font-medium">Lista</span>
+              </Link>
+            </div>
+          </nav>
+        )}
       </div>
     </Router>
   );

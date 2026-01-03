@@ -4,9 +4,11 @@ import { PlusCircle, Loader2, CheckCircle, Film, Search, Filter, X, Info, XCircl
 import { supabase } from '../supabaseClient';
 import toast from 'react-hot-toast';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 
 const MovieSearch = () => {
   const { isDark, toggleTheme } = useTheme();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [watchlist, setWatchlist] = useState([]);
   const [watchedMovies, setWatchedMovies] = useState(new Set()); // Set de IDs de filmes assistidos
@@ -45,11 +47,13 @@ const MovieSearch = () => {
 
   // Carregar a watchlist, gêneros e países quando o componente monta
   useEffect(() => {
-    fetchWatchlist();
+    if (user) {
+      fetchWatchlist();
+    }
     fetchGenres();
     fetchCountries();
     loadMovies(1);
-  }, []);
+  }, [user]);
 
   const fetchGenres = async () => {
     try {
@@ -82,9 +86,12 @@ const MovieSearch = () => {
   };
 
   const fetchWatchlist = async () => {
+    if (!user) return;
+    
     const { data, error } = await supabase
       .from('watchlist')
-      .select('movie_id, status');
+      .select('movie_id, status')
+      .eq('user_id', user.id);
     
     if (!error && data) {
       // Filmes que aparecem na lista: status = 'listed' ou 'both'
@@ -497,6 +504,7 @@ const MovieSearch = () => {
       .from('watchlist')
       .select('movie_id, status')
       .eq('movie_id', movie.id)
+      .eq('user_id', user.id)
       .single();
 
     if (existing) {
@@ -515,7 +523,8 @@ const MovieSearch = () => {
       const { error } = await supabase
         .from('watchlist')
         .update({ status: newStatus })
-        .eq('movie_id', movie.id);
+        .eq('movie_id', movie.id)
+        .eq('user_id', user.id);
 
       if (error) {
         toast.error("Erro ao adicionar: " + error.message);
@@ -534,7 +543,8 @@ const MovieSearch = () => {
             movie_id: movie.id, 
             title: movie.title, 
             poster_path: movie.poster_path,
-            status: 'listed'
+            status: 'listed',
+            user_id: user.id
           }
         ]);
 
@@ -560,6 +570,7 @@ const MovieSearch = () => {
         .from('watchlist')
         .select('movie_id, status')
         .eq('movie_id', movie.id)
+        .eq('user_id', user.id)
         .single();
 
       let newStatus;
@@ -584,7 +595,8 @@ const MovieSearch = () => {
             const { error } = await supabase
               .from('watchlist')
               .delete()
-              .eq('movie_id', movie.id);
+              .eq('movie_id', movie.id)
+              .eq('user_id', user.id);
 
             if (error) {
               console.error('Erro ao remover:', error);
@@ -611,7 +623,8 @@ const MovieSearch = () => {
         const { error } = await supabase
           .from('watchlist')
           .update({ status: newStatus })
-          .eq('movie_id', movie.id);
+          .eq('movie_id', movie.id)
+          .eq('user_id', user.id);
 
         if (error) {
           console.error('Erro ao atualizar status:', error);
@@ -628,7 +641,8 @@ const MovieSearch = () => {
               movie_id: movie.id, 
               title: movie.title, 
               poster_path: movie.poster_path,
-              status: 'watched'
+              status: 'watched',
+              user_id: user.id
             }
           ]);
 

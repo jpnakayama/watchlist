@@ -3,19 +3,24 @@ import { supabase } from '../supabaseClient';
 import { Trash2, Film, Loader2, CheckCircle, Moon, Sun } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 
 const Watchlist = () => {
   const { isDark, toggleTheme } = useTheme();
+  const { user } = useAuth();
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [removingId, setRemovingId] = useState(null);
 
   // Função para buscar os filmes do Supabase
   const fetchWatchlist = async () => {
+    if (!user) return;
+    
     setLoading(true);
     const { data, error } = await supabase
       .from('watchlist')
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -53,7 +58,8 @@ const Watchlist = () => {
       const { error } = await supabase
         .from('watchlist')
         .update({ status: newStatus })
-        .eq('movie_id', movieId);
+        .eq('movie_id', movieId)
+        .eq('user_id', user.id);
 
       if (error) {
         console.error('Erro ao atualizar status:', error);
@@ -88,7 +94,8 @@ const Watchlist = () => {
       const { error } = await supabase
         .from('watchlist')
         .delete()
-        .eq('movie_id', movieId);
+        .eq('movie_id', movieId)
+        .eq('user_id', user.id);
 
       if (error) {
         console.error('Erro ao remover filme:', error);
@@ -111,8 +118,10 @@ const Watchlist = () => {
   };
 
   useEffect(() => {
-    fetchWatchlist();
-  }, []);
+    if (user) {
+      fetchWatchlist();
+    }
+  }, [user]);
 
   if (loading) return <div className="p-10 text-center text-gray-500 dark:text-gray-400">Carregando sua lista...</div>;
 

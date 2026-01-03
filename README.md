@@ -4,6 +4,7 @@ Uma aplicação web moderna para gerenciar sua lista de filmes favoritos, com bu
 
 ## ✨ Funcionalidades
 
+- **🔐 Autenticação de Usuários**: Sistema completo de login e cadastro com isolamento de dados por usuário
 - **🔍 Busca Inteligente**: Busque filmes por título com debounce para otimizar performance
 - **📋 Gerenciamento de Lista**: Adicione e gerencie seus filmes favoritos
 - **🎲 Sorteador de Filmes**: Sorteie um filme aleatório da sua lista quando não souber o que assistir
@@ -28,6 +29,10 @@ Uma aplicação web moderna para gerenciar sua lista de filmes favoritos, com bu
   - Funciona offline (com cache)
   - Atualização automática
 - **🌓 Modo Escuro**: Suporte completo a tema claro e escuro
+- **🔒 Segurança**: 
+  - Row Level Security (RLS) no Supabase
+  - Isolamento completo de dados por usuário
+  - Proteção de rotas com redirecionamento automático
 - **⚡ Performance Otimizada**: 
   - Carregamento paralelo de páginas
   - Cancelamento de requisições duplicadas

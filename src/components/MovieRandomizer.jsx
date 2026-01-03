@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { Dices, Filter, Film, Calendar, Moon, Sun } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 
 // Lista básica de géneros do TMDB (podes expandir depois)
 const GENRES = {
@@ -13,6 +14,7 @@ const GENRES = {
 
 const MovieRandomizer = () => {
   const { isDark, toggleTheme } = useTheme();
+  const { user } = useAuth();
   const [watchlist, setWatchlist] = useState([]);
   const [filteredMovies, setFilteredMovies] = useState([]);
   const [selectedMovie, setSelectedMovie] = useState(null);
@@ -24,12 +26,20 @@ const MovieRandomizer = () => {
   const [yearFilter, setYearFilter] = useState('');
 
   useEffect(() => {
-    fetchWatchlist();
-  }, []);
+    if (user) {
+      fetchWatchlist();
+    }
+  }, [user]);
 
   const fetchWatchlist = async () => {
+    if (!user) return;
+    
     setLoading(true);
-    const { data, error } = await supabase.from('watchlist').select('*');
+    const { data, error } = await supabase
+      .from('watchlist')
+      .select('*')
+      .eq('user_id', user.id);
+      
     if (!error) {
       // Filtrar apenas filmes que estão na lista E não estão assistidos
       // Status 'listed' = na lista e não assistido (pode ser sorteado)
