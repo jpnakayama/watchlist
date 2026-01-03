@@ -734,12 +734,12 @@ const MovieSearch = () => {
   };
 
   return (
-    <div className="p-4 max-w-6xl mx-auto">
+    <div className="w-full max-w-6xl mx-auto px-2 md:px-4 py-4 pb-24 md:pb-4">
       {/* Título do Catálogo */}
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Film className="text-blue-600 dark:text-blue-400" size={32} />
-          <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100">Catálogo de Filmes</h1>
+          <Film className="text-blue-600 dark:text-blue-400" size={24} />
+          <h1 className="text-xl md:text-3xl font-bold text-gray-800 dark:text-gray-100">Catálogo de Filmes</h1>
         </div>
         {/* Botão de Toggle de Tema */}
         <button
@@ -754,9 +754,9 @@ const MovieSearch = () => {
       {/* Barra Unificada: Busca + Filtros + Visualização */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
         {/* Linha superior: Busca + Controles */}
-        <div className="flex items-center gap-3 p-4 border-b border-gray-100 dark:border-gray-700">
+        <div className="flex flex-col md:flex-row md:items-center gap-3 p-4 border-b border-gray-100 dark:border-gray-700">
           {/* Busca */}
-          <form onSubmit={handleSearch} className="flex-1 relative">
+          <form onSubmit={handleSearch} className="flex-1 relative w-full md:w-auto">
             <input
               type="text"
               value={searchQuery}
@@ -777,7 +777,7 @@ const MovieSearch = () => {
           </form>
 
           {/* Filtros e Visualização */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between gap-3 w-full md:w-auto">
             {/* Botão de Filtros */}
             <div className="flex items-center gap-2">
               <Filter size={18} className="text-gray-400 dark:text-gray-500" />
@@ -817,16 +817,16 @@ const MovieSearch = () => {
         {/* Filtros (recolhível) */}
         {filtersExpanded && (
           <div className="p-4 bg-gray-50 dark:bg-gray-900/50">
-            <div className="flex flex-nowrap items-center gap-3 overflow-x-auto">
+            <div className="flex flex-col md:flex-row md:flex-nowrap md:items-center gap-3 md:overflow-x-auto">
               {/* Gênero */}
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex flex-col md:flex-row md:items-center gap-2 flex-shrink-0">
                 <label className="text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">Gênero:</label>
                 <select 
                   value={selectedGenre}
                   onChange={(e) => {
                     handleFilterChange(e.target.value, null, null);
                   }}
-                  className="border-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 min-w-[150px]"
+                  className="border-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 w-full md:min-w-[150px]"
                 >
                   <option value="">Todos</option>
                   {genres.map((genre) => (
@@ -836,14 +836,14 @@ const MovieSearch = () => {
               </div>
 
               {/* Ano */}
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex flex-col md:flex-row md:items-center gap-2 flex-shrink-0">
                 <label className="text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">Ano:</label>
                 <select 
                   value={selectedYear}
                   onChange={(e) => {
                     handleFilterChange(null, e.target.value, null);
                   }}
-                  className="border-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 min-w-[120px]"
+                  className="border-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 w-full md:min-w-[120px]"
                 >
                   <option value="">Todos</option>
                   {Array.from({ length: 100 }, (_, i) => {
@@ -856,14 +856,14 @@ const MovieSearch = () => {
               </div>
 
               {/* País */}
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex flex-col md:flex-row md:items-center gap-2 flex-shrink-0">
                 <label className="text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">País:</label>
                 <select 
                   value={selectedCountry}
                   onChange={(e) => {
                     handleFilterChange(null, null, null, e.target.value);
                   }}
-                  className="border-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 w-[150px]"
+                  className="border-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 w-full md:w-[150px]"
                 >
                   <option value="">Todos</option>
                   {countries.map((country) => (
@@ -875,14 +875,14 @@ const MovieSearch = () => {
               </div>
 
               {/* Ordenar por */}
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex flex-col md:flex-row md:items-center gap-2 flex-shrink-0">
                 <label className="text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">Ordenar por:</label>
                 <select 
                   value={sortBy}
                   onChange={(e) => {
                     handleFilterChange(null, null, e.target.value);
                   }}
-                  className="border-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 min-w-[180px]"
+                  className="border-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 w-full md:min-w-[180px]"
                 >
                   <option value="popularity.desc">Mais Populares</option>
                   <option value="vote_average.desc">Melhor Avaliados</option>
@@ -893,37 +893,40 @@ const MovieSearch = () => {
                 </select>
               </div>
 
-              {/* Botão: Na Lista */}
-              <button
-                onClick={() => {
-                  setFilterInList(!filterInList);
-                  setPage(1);
-                }}
-                className={`flex items-center justify-center p-2 rounded-lg transition flex-shrink-0 ${
-                  filterInList
-                    ? 'bg-blue-600 dark:bg-blue-500 text-white hover:bg-blue-700 dark:hover:bg-blue-600'
-                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
-                }`}
-                title="Filtrar filmes na lista"
-              >
-                <Bookmark size={18} />
-              </button>
+              {/* Botões de filtro (Na Lista e Assistido) */}
+              <div className="flex flex-row md:flex-row gap-2 flex-shrink-0">
+                {/* Botão: Na Lista */}
+                <button
+                  onClick={() => {
+                    setFilterInList(!filterInList);
+                    setPage(1);
+                  }}
+                  className={`flex items-center justify-center p-2 rounded-lg transition flex-shrink-0 ${
+                    filterInList
+                      ? 'bg-blue-600 dark:bg-blue-500 text-white hover:bg-blue-700 dark:hover:bg-blue-600'
+                      : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
+                  }`}
+                  title="Filtrar filmes na lista"
+                >
+                  <Bookmark size={18} />
+                </button>
 
-              {/* Botão: Assistido */}
-              <button
-                onClick={() => {
-                  setFilterWatched(!filterWatched);
-                  setPage(1);
-                }}
-                className={`flex items-center justify-center p-2 rounded-lg transition flex-shrink-0 ${
-                  filterWatched
-                    ? 'bg-green-600 dark:bg-green-500 text-white hover:bg-green-700 dark:hover:bg-green-600'
-                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
-                }`}
-                title="Filtrar filmes assistidos"
-              >
-                <Eye size={18} />
-              </button>
+                {/* Botão: Assistido */}
+                <button
+                  onClick={() => {
+                    setFilterWatched(!filterWatched);
+                    setPage(1);
+                  }}
+                  className={`flex items-center justify-center p-2 rounded-lg transition flex-shrink-0 ${
+                    filterWatched
+                      ? 'bg-green-600 dark:bg-green-500 text-white hover:bg-green-700 dark:hover:bg-green-600'
+                      : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
+                  }`}
+                  title="Filtrar filmes assistidos"
+                >
+                  <Eye size={18} />
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -938,10 +941,10 @@ const MovieSearch = () => {
         <>
           {viewMode === 'grid' ? (
             // Visualização em Grid
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
               {currentPageMovies.map((movie) => (
                 <div key={movie.id} className="group relative bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-md hover:shadow-xl transition">
-                  <div className="relative h-80 overflow-hidden">
+                  <div className="relative aspect-[2/3] overflow-hidden">
                     {movie.poster_path ? (
                       <img 
                         src={`https://image.tmdb.org/t/p/w500${movie.poster_path}`} 
@@ -1001,7 +1004,7 @@ const MovieSearch = () => {
               ))}
             </div>
           ) : (
-            // Visualização em Lista Miniatura (3-4 filmes por linha)
+            // Visualização em Lista Miniatura (1 filme por linha no mobile)
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {currentPageMovies.map((movie) => (
                 <div key={movie.id} className="group bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition overflow-hidden">
@@ -1215,10 +1218,10 @@ const MovieSearch = () => {
                         <img 
                           src={`https://image.tmdb.org/t/p/w500${movieDetails.poster_path}`}
                           alt={movieDetails.title}
-                          className="w-full rounded-lg shadow-lg"
+                          className="w-full max-w-[200px] md:max-w-none mx-auto md:mx-0 rounded-lg shadow-lg"
                         />
                       ) : (
-                        <div className="w-full h-96 bg-gray-200 rounded-lg flex items-center justify-center text-gray-400">
+                        <div className="w-full max-w-[200px] md:max-w-none mx-auto md:mx-0 h-96 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center text-gray-400 dark:text-gray-500">
                           Sem Poster
                         </div>
                       )}
@@ -1229,26 +1232,26 @@ const MovieSearch = () => {
                       {/* Sinopse */}
                       {movieDetails.overview && (
                         <div className="mb-6">
-                          <h3 className="text-xl font-bold mb-2">Sinopse</h3>
-                          <p className="text-gray-700 leading-relaxed">{movieDetails.overview}</p>
+                          <h3 className="text-xl font-bold mb-2 text-gray-900 dark:text-gray-100">Sinopse</h3>
+                          <p className="text-gray-700 dark:text-gray-300 leading-relaxed">{movieDetails.overview}</p>
                         </div>
                       )}
 
                       {/* Diretor */}
                       {movieDetails.director && (
                         <div className="mb-4">
-                          <h3 className="text-lg font-semibold mb-1">Diretor</h3>
-                          <p className="text-gray-700">{movieDetails.director.name}</p>
+                          <h3 className="text-lg font-semibold mb-1 text-gray-900 dark:text-gray-100">Diretor</h3>
+                          <p className="text-gray-700 dark:text-gray-300">{movieDetails.director.name}</p>
                         </div>
                       )}
 
                       {/* Gêneros */}
                       {movieDetails.genres && movieDetails.genres.length > 0 && (
                         <div className="mb-4">
-                          <h3 className="text-lg font-semibold mb-2">Gêneros</h3>
+                          <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Gêneros</h3>
                           <div className="flex flex-wrap gap-2">
                             {movieDetails.genres.map((genre) => (
-                              <span key={genre.id} className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm">
+                              <span key={genre.id} className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-3 py-1 rounded-full text-sm">
                                 {genre.name}
                               </span>
                             ))}
@@ -1259,11 +1262,11 @@ const MovieSearch = () => {
                       {/* Onde assistir */}
                       {movieDetails.providers && (
                         <div className="mb-4">
-                          <h3 className="text-lg font-semibold mb-2">Onde Assistir</h3>
+                          <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Onde Assistir</h3>
                           <div className="flex flex-wrap gap-3">
                             {movieDetails.providers.flatrate && movieDetails.providers.flatrate.length > 0 ? (
                               <>
-                                <span className="text-sm text-gray-600">Streaming:</span>
+                                <span className="text-sm text-gray-600 dark:text-gray-400">Streaming:</span>
                                 {movieDetails.providers.flatrate.map((provider) => (
                                   <img
                                     key={provider.provider_id}
@@ -1275,7 +1278,7 @@ const MovieSearch = () => {
                                 ))}
                               </>
                             ) : (
-                              <span className="text-sm text-gray-500">Informação não disponível</span>
+                              <span className="text-sm text-gray-500 dark:text-gray-400">Informação não disponível</span>
                             )}
                           </div>
                         </div>
@@ -1286,13 +1289,13 @@ const MovieSearch = () => {
                   {/* Elenco */}
                   {movieDetails.cast && movieDetails.cast.length > 0 && (
                     <div>
-                      <h3 className="text-xl font-bold mb-4">Elenco Principal</h3>
+                      <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">Elenco Principal</h3>
                       <ul className="space-y-2">
                         {movieDetails.cast.map((actor) => (
-                          <li key={actor.id} className="text-gray-700">
+                          <li key={actor.id} className="text-gray-700 dark:text-gray-300">
                             <span className="font-semibold">{actor.name}</span>
                             {actor.character && (
-                              <span className="text-gray-500"> como {actor.character}</span>
+                              <span className="text-gray-500 dark:text-gray-400"> como {actor.character}</span>
                             )}
                           </li>
                         ))}

@@ -44,9 +44,9 @@ function App() {
         </Routes>
 
         {/* Menu Inferior Estilo App Mobile */}
-        <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 py-3 flex items-end justify-center shadow-lg z-50">
+        <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 py-3 flex items-end justify-center shadow-lg z-50">
           {/* Container com os três botões */}
-          <div className="flex items-end justify-center gap-4 w-full max-w-md">
+          <div className="flex items-end justify-center gap-4 w-full max-w-md mx-auto px-4">
             {/* Botão Catálogo */}
             <Link to="/" className="flex flex-col items-center gap-1 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition pb-1">
               <LayoutGrid size={24} />
