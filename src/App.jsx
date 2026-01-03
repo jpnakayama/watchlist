@@ -11,7 +11,7 @@ function App() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20 transition-colors"> {/* pb-20 para não cobrir o menu no mobile */}
+      <div className="min-h-screen w-full bg-gray-50 dark:bg-gray-900 pb-20 transition-colors overflow-x-hidden"> {/* pb-20 para não cobrir o menu no mobile */}
         <Toaster 
           position="top-right"
           toastOptions={{

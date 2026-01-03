@@ -734,9 +734,9 @@ const MovieSearch = () => {
   };
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-2 md:px-4 py-4 pb-24 md:pb-4">
+    <div className="w-full max-w-full md:max-w-6xl md:mx-auto px-0 md:px-4 py-4 pb-24 md:pb-4 overflow-x-hidden">
       {/* Título do Catálogo */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between px-4 md:px-0">
         <div className="flex items-center gap-2">
           <Film className="text-blue-600 dark:text-blue-400" size={24} />
           <h1 className="text-xl md:text-3xl font-bold text-gray-800 dark:text-gray-100">Catálogo de Filmes</h1>
@@ -752,7 +752,7 @@ const MovieSearch = () => {
       </div>
 
       {/* Barra Unificada: Busca + Filtros + Visualização */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
+      <div className="bg-white dark:bg-gray-800 rounded-none md:rounded-xl shadow-sm border-x-0 md:border border-gray-100 dark:border-gray-700 mb-6">
         {/* Linha superior: Busca + Controles */}
         <div className="flex flex-col md:flex-row md:items-center gap-3 p-4 border-b border-gray-100 dark:border-gray-700">
           {/* Busca */}
@@ -934,14 +934,14 @@ const MovieSearch = () => {
 
       {/* Resultados */}
       {loading && allFilteredMovies.length === 0 ? (
-        <div className="flex justify-center py-20">
+        <div className="flex justify-center py-20 px-4 md:px-0">
           <Loader2 className="animate-spin text-blue-500 dark:text-blue-400" size={48} />
         </div>
       ) : (
         <>
           {viewMode === 'grid' ? (
             // Visualização em Grid
-            <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6 px-4 md:px-0">
               {currentPageMovies.map((movie) => (
                 <div key={movie.id} className="group relative bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-md hover:shadow-xl transition">
                   <div className="relative aspect-[2/3] overflow-hidden">
@@ -1005,7 +1005,7 @@ const MovieSearch = () => {
             </div>
           ) : (
             // Visualização em Lista Miniatura (1 filme por linha no mobile)
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 px-4 md:px-0">
               {currentPageMovies.map((movie) => (
                 <div key={movie.id} className="group bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition overflow-hidden">
                   <div className="flex">
@@ -1087,7 +1087,7 @@ const MovieSearch = () => {
           
           {/* Controles de Paginação */}
           {allFilteredMovies.length > 0 && (
-            <div className="flex flex-col items-center gap-4 mt-8">
+            <div className="flex flex-col items-center gap-4 mt-8 px-4 md:px-0">
               {/* Informação de paginação */}
               <div className="text-sm text-gray-600 dark:text-gray-400">
                 Página {page} de {totalPagesFiltered > 0 ? totalPagesFiltered : 1} • {clientFilteredMovies.length} filme{clientFilteredMovies.length !== 1 ? 's' : ''} encontrado{clientFilteredMovies.length !== 1 ? 's' : ''} • Mostrando {currentPageMovies.length} de {clientFilteredMovies.length}
@@ -1151,7 +1151,7 @@ const MovieSearch = () => {
 
       {/* Modal de Detalhes do Filme */}
       {selectedMovie && (
-        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4" onClick={closeMovieDetails}>
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-[60] p-4" onClick={closeMovieDetails}>
           <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             {loadingDetails ? (
               <div className="flex justify-center items-center py-20">
