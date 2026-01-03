@@ -1,6 +1,6 @@
-# 🎬 Watchlist App
+# 🎬 MoviePicker (Watchlist App)
 
-Uma aplicação web moderna para gerenciar sua lista de filmes favoritos, com busca avançada, filtros e visualizações personalizadas.
+Uma aplicação web moderna para gerenciar sua lista de filmes favoritos, com busca avançada, filtros e visualizações personalizadas. **PWA (Progressive Web App)** totalmente funcional que pode ser instalada como app no celular.
 
 ## ✨ Funcionalidades
 
@@ -8,14 +8,26 @@ Uma aplicação web moderna para gerenciar sua lista de filmes favoritos, com bu
 - **📋 Gerenciamento de Lista**: Adicione e gerencie seus filmes favoritos
 - **🎲 Sorteador de Filmes**: Sorteie um filme aleatório da sua lista quando não souber o que assistir
 - **🎨 Visualizações Flexíveis**: 
-  - Modo Grid: Visualização em grade com cartazes grandes
-  - Modo Lista: Visualização compacta com 3-4 filmes por linha
+  - Modo Grid: Visualização em grade com 1 cartaz por linha no mobile
+  - Modo Lista: Visualização compacta com 1 filme por linha no mobile (padrão)
 - **🔧 Filtros Avançados**:
   - Filtro por gênero
   - Filtro por ano (dropdown com últimos 100 anos)
+  - Filtro por país
+  - Filtro por filmes na lista
+  - Filtro por filmes assistidos
   - Ordenação por popularidade, avaliação, data de lançamento ou título
 - **📄 Paginação**: Navegação intuitiva com 50 filmes por página
-- **📱 Responsivo**: Interface adaptável para desktop e mobile
+- **📱 Responsivo e Mobile-First**: 
+  - Interface totalmente adaptada para mobile
+  - Menu de navegação fixo no rodapé
+  - Layout com largura 100% no mobile
+  - Barra de busca e filtros otimizada para telas pequenas
+- **📱 PWA (Progressive Web App)**: 
+  - Instalável como app no celular
+  - Funciona offline (com cache)
+  - Atualização automática
+- **🌓 Modo Escuro**: Suporte completo a tema claro e escuro
 - **⚡ Performance Otimizada**: 
   - Carregamento paralelo de páginas
   - Cancelamento de requisições duplicadas
@@ -31,6 +43,8 @@ Uma aplicação web moderna para gerenciar sua lista de filmes favoritos, com bu
 - **Lucide React** - Biblioteca de ícones
 - **React Router** - Roteamento de páginas
 - **TMDB API** - The Movie Database API para dados de filmes
+- **Vite PWA Plugin** - Suporte a Progressive Web App
+- **React Hot Toast** - Notificações toast elegantes
 
 ## 🚀 Como Executar
 
@@ -81,12 +95,17 @@ watchlist-app/
 │   │   ├── MovieSearch.jsx      # Componente principal de busca e catálogo
 │   │   ├── Watchlist.jsx        # Componente da lista de filmes salvos
 │   │   └── MovieRandomizer.jsx  # Componente para sortear filmes
-│   ├── App.jsx                  # Componente raiz com rotas
+│   ├── contexts/
+│   │   └── ThemeContext.jsx     # Contexto para gerenciar tema claro/escuro
+│   ├── App.jsx                  # Componente raiz com rotas e menu fixo
 │   ├── main.jsx                 # Ponto de entrada da aplicação
 │   ├── supabaseClient.js        # Configuração do cliente Supabase
 │   └── index.css                 # Estilos globais
-├── public/                      # Arquivos estáticos
+├── public/
+│   └── icon.png                 # Ícone do PWA (favicon e app icon)
+├── vite.config.js              # Configuração do Vite e PWA
 ├── package.json                # Dependências do projeto
+├── .env                        # Variáveis de ambiente (não versionado)
 └── README.md                   # Este arquivo
 ```
 
@@ -138,6 +157,92 @@ Certifique-se de configurar as seguintes variáveis no arquivo `.env`:
 - `npm run build` - Cria build de produção
 - `npm run preview` - Preview do build de produção
 - `npm run lint` - Executa o linter
+
+## 🚀 Publicação e Deploy
+
+### Publicando no Vercel
+
+1. **Instale a CLI do Vercel** (se ainda não tiver):
+```bash
+npm i -g vercel
+```
+
+2. **Faça login no Vercel**:
+```bash
+vercel login
+```
+
+3. **Configure as variáveis de ambiente no Vercel**:
+   - Acesse o dashboard do Vercel após o deploy
+   - Vá em Settings > Environment Variables
+   - Adicione as seguintes variáveis:
+     - `VITE_TMDB_API_KEY`
+     - `VITE_SUPABASE_URL`
+     - `VITE_SUPABASE_ANON_KEY`
+
+4. **Faça o deploy**:
+```bash
+vercel
+```
+
+Ou conecte seu repositório GitHub ao Vercel:
+- Acesse [vercel.com](https://vercel.com)
+- Clique em "Add New Project"
+- Importe seu repositório
+- Configure as variáveis de ambiente
+- Deploy automático a cada push!
+
+### 📱 Instalando como App no Celular (PWA)
+
+Após publicar no Vercel, você pode instalar o app no seu celular:
+
+#### **Android (Chrome)**
+
+1. Abra o site no navegador Chrome
+2. Toque no menu (três pontos) no canto superior direito
+3. Selecione **"Adicionar à tela inicial"** ou **"Instalar app"**
+4. Confirme a instalação
+5. O app aparecerá na tela inicial como um app nativo
+
+#### **iOS (Safari)**
+
+1. Abra o site no navegador Safari
+2. Toque no botão de compartilhar (quadrado com seta para cima)
+3. Role para baixo e selecione **"Adicionar à Tela de Início"**
+4. Personalize o nome se desejar
+5. Toque em **"Adicionar"**
+6. O app aparecerá na tela inicial
+
+#### **Características do PWA**
+
+- ✅ Funciona offline (com cache)
+- ✅ Atualização automática quando houver novas versões
+- ✅ Ícone personalizado na tela inicial
+- ✅ Abre em tela cheia (sem barra do navegador)
+- ✅ Experiência similar a um app nativo
+
+## 🎨 Melhorias Recentes
+
+### Layout Mobile
+- ✅ Barra de busca e filtros reorganizados para mobile
+- ✅ Menu de navegação fixo no rodapé
+- ✅ Layout com largura 100% no mobile (sem faixas brancas)
+- ✅ Visualização em grid: 1 cartaz por linha no mobile
+- ✅ Visualização em lista: 1 filme por linha no mobile (padrão)
+- ✅ Modal de detalhes otimizado para mobile
+- ✅ Título e elementos ajustados para melhor visualização
+
+### PWA
+- ✅ Configuração completa de Progressive Web App
+- ✅ Ícone personalizado (icon.png)
+- ✅ Tema escuro como padrão
+- ✅ Atualização automática
+
+### UX/UI
+- ✅ Modo escuro/claro com toggle
+- ✅ Cores do texto ajustadas para melhor legibilidade
+- ✅ Modal com z-index acima do menu fixo
+- ✅ Animações e transições suaves
 
 ## 🤝 Contribuindo
 
