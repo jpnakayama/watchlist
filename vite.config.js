@@ -11,19 +11,19 @@ export default defineConfig({
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       manifest: {
         name: 'Movie Matcher JP',
-        short_name: 'MovieMatch',
+        short_name: 'MoviePicker',
         description: 'Catálogo e sorteador de filmes para uso pessoal',
-        theme_color: '#ffffff', // Cor da barra de status no Android
-        background_color: '#ffffff',
+        theme_color: '#111827', // Cor da barra de status no Android (gray-900 - modo escuro)
+        background_color: '#111827',
         display: 'standalone', // Faz o app abrir sem a barra do navegador
         icons: [
           {
-            src: 'pwa-192x192.png',
+            src: 'icon.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: 'pwa-512x512.png',
+            src: 'icon.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable' // Permite que o ícone se ajuste a diferentes formatos (circular, quadrado)
