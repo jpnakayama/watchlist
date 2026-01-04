@@ -5,14 +5,14 @@ import MovieRandomizer from "./components/MovieRandomizer";
 import Watchlist from './components/Watchlist';
 import Login from './components/Login';
 import ProtectedRoute from './components/ProtectedRoute';
-import { LayoutGrid, Dices, Film, Moon, Sun } from 'lucide-react';
+import { LayoutGrid, Dices, Film, Moon, Sun, LogOut, User } from 'lucide-react';
 import { useTheme } from './contexts/ThemeContext';
 import { useAuth } from './contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 function App() {
   const { isDark, toggleTheme } = useTheme();
-  const { user, signOut } = useAuth();
+  const { user, profile, loading, signOut } = useAuth();
 
   const handleLogout = async () => {
     const { error } = await signOut();
@@ -25,7 +25,7 @@ function App() {
 
   return (
     <Router>
-      <div className="min-h-screen w-full bg-gray-50 dark:bg-gray-900 pb-20 transition-colors overflow-x-hidden"> {/* pb-20 para não cobrir o menu no mobile */}
+      <div className={`min-h-screen w-full bg-gray-50 dark:bg-gray-900 transition-colors overflow-x-hidden ${user ? 'pt-16 pb-20' : 'pb-20'}`}> {/* pt-16 para header, pb-20 para menu no mobile */}
         <Toaster 
           position="top-right"
           toastOptions={{
@@ -54,7 +54,20 @@ function App() {
         <Routes>
           <Route 
             path="/login" 
-            element={user ? <Navigate to="/" replace /> : <Login />} 
+            element={
+              loading ? (
+                <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400 mx-auto mb-4"></div>
+                    <p className="text-gray-600 dark:text-gray-400">Carregando...</p>
+                  </div>
+                </div>
+              ) : user ? (
+                <Navigate to="/" replace />
+              ) : (
+                <Login />
+              )
+            } 
           />
           <Route 
             path="/" 
@@ -81,6 +94,31 @@ function App() {
             } 
           />
         </Routes>
+
+        {/* Header com usuário e botão de logout - apenas quando autenticado */}
+        {user && (
+          <div className="fixed top-0 left-0 right-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between z-40">
+            {/* Informações do usuário */}
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-blue-600 dark:bg-blue-500 flex items-center justify-center">
+                <User size={18} className="text-white" />
+              </div>
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {profile?.full_name || profile?.username || 'Usuário'}
+              </span>
+            </div>
+            
+            {/* Botão de logout */}
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+              title="Sair"
+            >
+              <LogOut size={18} />
+              <span className="hidden sm:inline">Sair</span>
+            </button>
+          </div>
+        )}
 
         {/* Menu Inferior Estilo App Mobile - apenas quando autenticado */}
         {user && (

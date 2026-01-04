@@ -5,6 +5,8 @@ import { useAuth } from '../contexts/AuthContext';
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
 
+  // Aguardar verificação de autenticação
+  // IMPORTANTE: Sempre aguardar loading completar antes de verificar user
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -16,6 +18,8 @@ const ProtectedRoute = ({ children }) => {
     );
   }
 
+  // Se não estiver autenticado, redirecionar para login
+  // Só verificar após loading ser false
   if (!user) {
     return <Navigate to="/login" replace />;
   }

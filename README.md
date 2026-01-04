@@ -60,6 +60,92 @@ Uma aplicação web moderna para gerenciar sua lista de filmes favoritos, com bu
 - Conta no [TMDB](https://www.themoviedb.org/) para obter API key
 - Conta no [Supabase](https://supabase.com/) para o backend
 
+### Configuração do Supabase
+
+Antes de executar o projeto, você precisa configurar o banco de dados no Supabase:
+
+1. **Criar tabela `profiles`**:
+```sql
+CREATE TABLE profiles (
+  id UUID REFERENCES auth.users(id) PRIMARY KEY,
+  username TEXT UNIQUE NOT NULL,
+  full_name TEXT,
+  birth_date DATE,
+  email TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
+2. **Adicionar coluna `user_id` na tabela `watchlist`**:
+```sql
+-- Adicionar coluna como nullable primeiro
+ALTER TABLE watchlist 
+ADD COLUMN user_id UUID REFERENCES auth.users(id);
+
+-- Criar índice
+CREATE INDEX idx_watchlist_user_id ON watchlist(user_id);
+
+-- Deletar registros antigos (se houver) ou atribuir a um usuário
+DELETE FROM watchlist WHERE user_id IS NULL;
+
+-- Alterar para NOT NULL
+ALTER TABLE watchlist 
+ALTER COLUMN user_id SET NOT NULL;
+```
+
+3. **Configurar Row Level Security (RLS)**:
+
+**Para `profiles`:**
+```sql
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own profile"
+  ON profiles FOR SELECT
+  USING (auth.uid() = id);
+
+CREATE POLICY "Users can update own profile"
+  ON profiles FOR UPDATE
+  USING (auth.uid() = id);
+```
+
+**Para `watchlist`:**
+```sql
+ALTER TABLE watchlist ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own watchlist"
+  ON watchlist FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own watchlist"
+  ON watchlist FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own watchlist"
+  ON watchlist FOR UPDATE
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own watchlist"
+  ON watchlist FOR DELETE
+  USING (auth.uid() = user_id);
+```
+
+4. **Criar trigger para criar profile automaticamente**:
+```sql
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email)
+  VALUES (NEW.id, NEW.email);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+```
+
 ### Instalação
 
 1. Clone o repositório:
@@ -99,9 +185,12 @@ watchlist-app/
 │   ├── components/
 │   │   ├── MovieSearch.jsx      # Componente principal de busca e catálogo
 │   │   ├── Watchlist.jsx        # Componente da lista de filmes salvos
-│   │   └── MovieRandomizer.jsx  # Componente para sortear filmes
+│   │   ├── MovieRandomizer.jsx  # Componente para sortear filmes
+│   │   ├── Login.jsx           # Tela de login e cadastro
+│   │   └── ProtectedRoute.jsx  # Componente para proteger rotas
 │   ├── contexts/
-│   │   └── ThemeContext.jsx     # Contexto para gerenciar tema claro/escuro
+│   │   ├── ThemeContext.jsx     # Contexto para gerenciar tema claro/escuro
+│   │   └── AuthContext.jsx      # Contexto para gerenciar autenticação
 │   ├── App.jsx                  # Componente raiz com rotas e menu fixo
 │   ├── main.jsx                 # Ponto de entrada da aplicação
 │   ├── supabaseClient.js        # Configuração do cliente Supabase
@@ -147,6 +236,13 @@ watchlist-app/
 ### Sorteador
 - Sorteia um filme aleatório da sua lista
 - Ideal para quando não sabe o que assistir
+
+### Autenticação
+- **Cadastro**: Crie sua conta com username, nome, data de nascimento e senha
+- **Login**: Acesse sua conta usando username e senha
+- **Isolamento de Dados**: Cada usuário tem sua própria lista isolada
+- **Proteção de Rotas**: Rotas protegidas redirecionam automaticamente para login
+- **Segurança**: Row Level Security (RLS) no Supabase garante isolamento no banco de dados
 
 ## 🔐 Variáveis de Ambiente
 
@@ -227,6 +323,15 @@ Após publicar no Vercel, você pode instalar o app no seu celular:
 - ✅ Experiência similar a um app nativo
 
 ## 🎨 Melhorias Recentes
+
+### Autenticação e Segurança
+- ✅ Sistema completo de autenticação com Supabase Auth
+- ✅ Tela de login/cadastro com validação de formulários
+- ✅ Proteção de rotas com redirecionamento automático
+- ✅ Isolamento de dados por usuário (user_id + RLS)
+- ✅ Context global de autenticação
+- ✅ Login por username (busca email automaticamente)
+- ✅ Cadastro com username, nome, data de nascimento e senha
 
 ### Layout Mobile
 - ✅ Barra de busca e filtros reorganizados para mobile
