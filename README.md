@@ -238,11 +238,15 @@ watchlist-app/
 - Ideal para quando não sabe o que assistir
 
 ### Autenticação
-- **Cadastro**: Crie sua conta com username, nome, data de nascimento e senha
+- **Cadastro**: Crie sua conta com username, nome completo (obrigatório), email (obrigatório), data de nascimento (obrigatório) e senha
 - **Login**: Acesse sua conta usando username e senha
+- **Recuperação de Senha**: Funcionalidade "Esqueci minha senha" para redefinir senha via email
+- **Mostrar/Ocultar Senha**: Toggle para visualizar senha durante digitação
 - **Isolamento de Dados**: Cada usuário tem sua própria lista isolada
 - **Proteção de Rotas**: Rotas protegidas redirecionam automaticamente para login
 - **Segurança**: Row Level Security (RLS) no Supabase garante isolamento no banco de dados
+- **Header com Usuário**: Exibe ícone e nome do usuário logado no topo da aplicação
+- **Logout**: Botão de sair facilmente acessível no header
 
 ## 🔐 Variáveis de Ambiente
 
@@ -327,11 +331,17 @@ Após publicar no Vercel, você pode instalar o app no seu celular:
 ### Autenticação e Segurança
 - ✅ Sistema completo de autenticação com Supabase Auth
 - ✅ Tela de login/cadastro com validação de formulários
+- ✅ Campos obrigatórios: nome completo, email e data de nascimento
+- ✅ Validação de idade mínima (13 anos)
+- ✅ Funcionalidade de recuperação de senha ("Esqueci minha senha")
+- ✅ Toggle de mostrar/ocultar senha nos campos de password
 - ✅ Proteção de rotas com redirecionamento automático
 - ✅ Isolamento de dados por usuário (user_id + RLS)
 - ✅ Context global de autenticação
 - ✅ Login por username (busca email automaticamente)
-- ✅ Cadastro com username, nome, data de nascimento e senha
+- ✅ Header com informações do usuário (ícone + nome)
+- ✅ Botão de logout no header
+- ✅ Correção de problemas de acesso sem autenticação
 
 ### Layout Mobile
 - ✅ Barra de busca e filtros reorganizados para mobile
