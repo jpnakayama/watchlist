@@ -88,25 +88,38 @@ const MovieSearch = () => {
   const fetchWatchlist = async () => {
     if (!user) return;
     
-    const { data, error } = await supabase
-      .from('watchlist')
-      .select('movie_id, status')
-      .eq('user_id', user.id);
-    
-    if (!error && data) {
-      // Filmes que aparecem na lista: status = 'listed' ou 'both'
-      setWatchlist(
-        data
-          .filter(item => item.status === 'listed' || item.status === 'both')
-          .map(item => item.movie_id)
-      );
-      // Filmes assistidos: status = 'watched' ou 'both'
-      const watched = new Set(
-        data
-          .filter(item => item.status === 'watched' || item.status === 'both')
-          .map(item => item.movie_id)
-      );
-      setWatchedMovies(watched);
+    try {
+      const { data, error } = await supabase
+        .from('watchlist')
+        .select('movie_id, status')
+        .eq('user_id', user.id);
+      
+      if (error) {
+        console.error('Erro ao buscar watchlist:', error);
+        // Se for erro 406, pode ser problema de sessão
+        if (error.code === 'PGRST301' || error.message?.includes('406')) {
+          console.warn('Erro ao buscar watchlist');
+        }
+        return;
+      }
+      
+      if (data) {
+        // Filmes que aparecem na lista: status = 'listed' ou 'both'
+        setWatchlist(
+          data
+            .filter(item => item.status === 'listed' || item.status === 'both')
+            .map(item => item.movie_id)
+        );
+        // Filmes assistidos: status = 'watched' ou 'both'
+        const watched = new Set(
+          data
+            .filter(item => item.status === 'watched' || item.status === 'both')
+            .map(item => item.movie_id)
+        );
+        setWatchedMovies(watched);
+      }
+    } catch (err) {
+      console.error('Erro inesperado ao buscar watchlist:', err);
     }
   };
 
@@ -500,12 +513,18 @@ const MovieSearch = () => {
     }
 
     // Verificar se o filme já existe na tabela
-    const { data: existing } = await supabase
+    const { data: existing, error: checkError } = await supabase
       .from('watchlist')
       .select('movie_id, status')
       .eq('movie_id', movie.id)
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
+    
+    if (checkError && checkError.code !== 'PGRST116') {
+      console.error('Erro ao verificar filme:', checkError);
+      toast.error(`Erro ao verificar filme: ${checkError.message}`);
+      return;
+    }
 
     if (existing) {
       // Se já existe e está apenas como 'watched', mudar para 'both'
@@ -527,12 +546,20 @@ const MovieSearch = () => {
         .eq('user_id', user.id);
 
       if (error) {
-        toast.error("Erro ao adicionar: " + error.message);
+        console.error('Erro ao adicionar:', error);
+        // Se for erro 406
+        if (error.code === 'PGRST301' || error.message?.includes('406')) {
+          toast.error('Erro ao processar requisição. Tente novamente.');
+        } else {
+          toast.error("Erro ao adicionar: " + error.message);
+        }
       } else {
         toast.success(`"${movie.title}" adicionado à lista!`, {
           icon: '✅',
         });
         setWatchlist([...watchlist, movie.id]);
+        // Recarregar watchlist para garantir sincronização
+        await fetchWatchlist();
       }
     } else {
       // Se não existe, inserir novo registro com status 'listed'
@@ -549,12 +576,20 @@ const MovieSearch = () => {
         ]);
 
       if (error) {
-        toast.error("Erro ao adicionar: " + error.message);
+        console.error('Erro ao adicionar:', error);
+        // Se for erro 406
+        if (error.code === 'PGRST301' || error.message?.includes('406')) {
+          toast.error('Erro ao processar requisição. Tente novamente.');
+        } else {
+          toast.error("Erro ao adicionar: " + error.message);
+        }
       } else {
         toast.success(`"${movie.title}" adicionado à lista!`, {
           icon: '✅',
         });
         setWatchlist([...watchlist, movie.id]);
+        // Recarregar watchlist para garantir sincronização
+        await fetchWatchlist();
       }
     }
   };
@@ -566,12 +601,18 @@ const MovieSearch = () => {
 
     try {
       // Verificar se o filme já existe na tabela
-      const { data: existing } = await supabase
+      const { data: existing, error: checkError } = await supabase
         .from('watchlist')
         .select('movie_id, status')
         .eq('movie_id', movie.id)
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
+      
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('Erro ao verificar filme:', checkError);
+        toast.error(`Erro ao verificar filme: ${checkError.message}`);
+        return;
+      }
 
       let newStatus;
       
@@ -628,7 +669,12 @@ const MovieSearch = () => {
 
         if (error) {
           console.error('Erro ao atualizar status:', error);
-          toast.error(`Erro ao atualizar status: ${error.message}`);
+          // Se for erro 406, pode ser problema de sessão
+          if (error.code === 'PGRST301' || error.message?.includes('406')) {
+            toast.error('Erro ao processar requisição. Tente novamente.');
+          } else {
+            toast.error(`Erro ao atualizar status: ${error.message}`);
+          }
           return;
         }
       } else {
@@ -648,7 +694,12 @@ const MovieSearch = () => {
 
         if (error) {
           console.error('Erro ao marcar como assistido:', error);
-          toast.error(`Erro ao marcar como assistido: ${error.message}`);
+          // Se for erro 406, pode ser problema de sessão
+          if (error.code === 'PGRST301' || error.message?.includes('406')) {
+            toast.error('Erro ao processar requisição. Tente novamente.');
+          } else {
+            toast.error(`Erro ao marcar como assistido: ${error.message}`);
+          }
           return;
         }
       }

@@ -64,11 +64,11 @@ Uma aplicação web moderna para gerenciar sua lista de filmes favoritos, com bu
 
 Antes de executar o projeto, você precisa configurar o banco de dados no Supabase:
 
-1. **Criar tabela `profiles`**:
+1. **Criar tabela `profiles`** (se ainda não existir):
 ```sql
-CREATE TABLE profiles (
+CREATE TABLE IF NOT EXISTS profiles (
   id UUID REFERENCES auth.users(id) PRIMARY KEY,
-  username TEXT UNIQUE NOT NULL,
+  username TEXT UNIQUE,
   full_name TEXT,
   birth_date DATE,
   email TEXT,
@@ -77,14 +77,14 @@ CREATE TABLE profiles (
 );
 ```
 
-2. **Adicionar coluna `user_id` na tabela `watchlist`**:
+2. **Adicionar coluna `user_id` na tabela `watchlist`** (se ainda não existir):
 ```sql
 -- Adicionar coluna como nullable primeiro
 ALTER TABLE watchlist 
-ADD COLUMN user_id UUID REFERENCES auth.users(id);
+ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id);
 
 -- Criar índice
-CREATE INDEX idx_watchlist_user_id ON watchlist(user_id);
+CREATE INDEX IF NOT EXISTS idx_watchlist_user_id ON watchlist(user_id);
 
 -- Deletar registros antigos (se houver) ou atribuir a um usuário
 DELETE FROM watchlist WHERE user_id IS NULL;
@@ -94,17 +94,34 @@ ALTER TABLE watchlist
 ALTER COLUMN user_id SET NOT NULL;
 ```
 
-3. **Configurar Row Level Security (RLS)**:
+3. **Executar o script completo de configuração**:
+
+Execute o arquivo `supabase_setup.sql` no SQL Editor do Supabase. Este script configura:
+- Políticas RLS para `watchlist` e `profiles`
+- Trigger para criar profile automaticamente
+- Função RPC `create_user_profile` para criar profile manualmente (fallback)
+- Função RPC `get_user_email_by_username` (opcional, para login por username)
+
+**Ou execute manualmente as políticas RLS:**
 
 **Para `profiles`:**
 ```sql
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view own profile"
+-- Política pública para SELECT (necessária para login)
+CREATE POLICY IF NOT EXISTS "Public profiles are viewable for login"
+  ON profiles FOR SELECT
+  USING (true);
+
+CREATE POLICY IF NOT EXISTS "Users can view own profile"
   ON profiles FOR SELECT
   USING (auth.uid() = id);
 
-CREATE POLICY "Users can update own profile"
+CREATE POLICY IF NOT EXISTS "Users can insert own profile"
+  ON profiles FOR INSERT
+  WITH CHECK (auth.uid() = id);
+
+CREATE POLICY IF NOT EXISTS "Users can update own profile"
   ON profiles FOR UPDATE
   USING (auth.uid() = id);
 ```
@@ -113,38 +130,27 @@ CREATE POLICY "Users can update own profile"
 ```sql
 ALTER TABLE watchlist ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view own watchlist"
+CREATE POLICY IF NOT EXISTS "Users can view own watchlist"
   ON watchlist FOR SELECT
   USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can insert own watchlist"
+CREATE POLICY IF NOT EXISTS "Users can insert own watchlist"
   ON watchlist FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Users can update own watchlist"
+CREATE POLICY IF NOT EXISTS "Users can update own watchlist"
   ON watchlist FOR UPDATE
   USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can delete own watchlist"
+CREATE POLICY IF NOT EXISTS "Users can delete own watchlist"
   ON watchlist FOR DELETE
   USING (auth.uid() = user_id);
 ```
 
-4. **Criar trigger para criar profile automaticamente**:
-```sql
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-  INSERT INTO public.profiles (id, email)
-  VALUES (NEW.id, NEW.email);
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-```
+4. **Configurar no Dashboard do Supabase**:
+   - Vá em **Authentication > Settings**
+   - **Desabilite "Enable email confirmations"** (para permitir login imediato após cadastro)
+   - (Opcional) Configure "Site URL" para sua URL de produção
 
 ### Instalação
 
@@ -186,17 +192,19 @@ watchlist-app/
 │   │   ├── MovieSearch.jsx      # Componente principal de busca e catálogo
 │   │   ├── Watchlist.jsx        # Componente da lista de filmes salvos
 │   │   ├── MovieRandomizer.jsx  # Componente para sortear filmes
-│   │   ├── Login.jsx           # Tela de login e cadastro
-│   │   └── ProtectedRoute.jsx  # Componente para proteger rotas
+│   │   ├── Login.jsx           # Tela de login e cadastro unificada
+│   │   └── ProtectedRoute.jsx  # Componente para proteger rotas autenticadas
 │   ├── contexts/
 │   │   ├── ThemeContext.jsx     # Contexto para gerenciar tema claro/escuro
-│   │   └── AuthContext.jsx      # Contexto para gerenciar autenticação
-│   ├── App.jsx                  # Componente raiz com rotas e menu fixo
+│   │   └── AuthContext.jsx      # Contexto para gerenciar autenticação e sessão
+│   ├── App.jsx                  # Componente raiz com rotas, header e menu fixo
 │   ├── main.jsx                 # Ponto de entrada da aplicação
 │   ├── supabaseClient.js        # Configuração do cliente Supabase
 │   └── index.css                 # Estilos globais
 ├── public/
 │   └── icon.png                 # Ícone do PWA (favicon e app icon)
+├── supabase_setup.sql          # Script SQL para configuração do Supabase
+├── disable_trigger.sql          # Script para desabilitar trigger (se necessário)
 ├── vite.config.js              # Configuração do Vite e PWA
 ├── package.json                # Dependências do projeto
 ├── .env                        # Variáveis de ambiente (não versionado)
@@ -238,15 +246,26 @@ watchlist-app/
 - Ideal para quando não sabe o que assistir
 
 ### Autenticação
-- **Cadastro**: Crie sua conta com username, nome completo (obrigatório), email (obrigatório), data de nascimento (obrigatório) e senha
-- **Login**: Acesse sua conta usando username e senha
-- **Recuperação de Senha**: Funcionalidade "Esqueci minha senha" para redefinir senha via email
+- **Cadastro**: Crie sua conta com email, username, nome completo (obrigatório), data de nascimento (obrigatório) e senha
+- **Login**: Acesse sua conta usando email e senha
+- **Validação de Formulário**: 
+  - Validação de email válido
+  - Username com mínimo de 3 caracteres e sem espaços
+  - Validação de idade mínima (13 anos)
+  - Confirmação de senha
 - **Mostrar/Ocultar Senha**: Toggle para visualizar senha durante digitação
-- **Isolamento de Dados**: Cada usuário tem sua própria lista isolada
-- **Proteção de Rotas**: Rotas protegidas redirecionam automaticamente para login
-- **Segurança**: Row Level Security (RLS) no Supabase garante isolamento no banco de dados
+- **Isolamento de Dados**: Cada usuário tem sua própria lista isolada através de `user_id`
+- **Proteção de Rotas**: Rotas protegidas redirecionam automaticamente para login se não autenticado
+- **Segurança**: 
+  - Row Level Security (RLS) no Supabase garante isolamento no banco de dados
+  - Políticas RLS configuradas para `watchlist` e `profiles`
+  - Função RPC com `SECURITY DEFINER` para criação de profile
 - **Header com Usuário**: Exibe ícone e nome do usuário logado no topo da aplicação
 - **Logout**: Botão de sair facilmente acessível no header
+- **Gerenciamento de Sessão**: 
+  - Persistência de sessão no localStorage
+  - Recarregamento automático de sessão ao voltar à aplicação
+  - Timeout de segurança para evitar travamento na tela de loading
 
 ## 🔐 Variáveis de Ambiente
 
@@ -330,18 +349,22 @@ Após publicar no Vercel, você pode instalar o app no seu celular:
 
 ### Autenticação e Segurança
 - ✅ Sistema completo de autenticação com Supabase Auth
-- ✅ Tela de login/cadastro com validação de formulários
+- ✅ Tela de login/cadastro unificada com validação de formulários
 - ✅ Campos obrigatórios: nome completo, email e data de nascimento
 - ✅ Validação de idade mínima (13 anos)
-- ✅ Funcionalidade de recuperação de senha ("Esqueci minha senha")
+- ✅ Validação de username (mínimo 3 caracteres, sem espaços)
+- ✅ Validação de email e confirmação de senha
 - ✅ Toggle de mostrar/ocultar senha nos campos de password
 - ✅ Proteção de rotas com redirecionamento automático
 - ✅ Isolamento de dados por usuário (user_id + RLS)
-- ✅ Context global de autenticação
-- ✅ Login por username (busca email automaticamente)
+- ✅ Context global de autenticação (AuthContext)
+- ✅ Login por email e senha
 - ✅ Header com informações do usuário (ícone + nome)
-- ✅ Botão de logout no header
-- ✅ Correção de problemas de acesso sem autenticação
+- ✅ Botão de logout no header com redirecionamento seguro
+- ✅ Gerenciamento robusto de sessão com timeout de segurança
+- ✅ Criação automática de profile via trigger ou RPC (fallback)
+- ✅ Tratamento de erros melhorado (maybeSingle para evitar erros quando profile não existe)
+- ✅ Correção de problemas de loading e travamento na tela de carregamento
 
 ### Layout Mobile
 - ✅ Barra de busca e filtros reorganizados para mobile
