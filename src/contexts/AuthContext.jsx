@@ -19,15 +19,24 @@ export const AuthProvider = ({ children }) => {
 
   // Buscar profile do usuário
   const fetchProfile = async (userId) => {
+    if (!userId) {
+      setProfile(null);
+      return;
+    }
+    
     try {
+      // Usar maybeSingle() para não dar erro se o profile não existir
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (error) {
-        console.error('Erro ao buscar profile:', error);
+        // Ignorar erro PGRST116 (nenhum resultado encontrado) - é esperado se o profile não existir ainda
+        if (error.code !== 'PGRST116') {
+          console.error('Erro ao buscar profile:', error);
+        }
         setProfile(null);
       } else {
         setProfile(data);
@@ -35,20 +44,31 @@ export const AuthProvider = ({ children }) => {
     } catch (err) {
       console.error('Erro ao buscar profile:', err);
       setProfile(null);
-    } finally {
-      setLoading(false);
     }
   };
 
   // Verificar sessão ao carregar
   useEffect(() => {
     let mounted = true;
+    let timeoutId;
     let sessionChecked = false;
 
+    // Timeout de segurança para garantir que loading sempre seja false
+    timeoutId = setTimeout(() => {
+      if (mounted && !sessionChecked) {
+        console.warn('Timeout na verificação de sessão, definindo loading como false');
+        setLoading(false);
+        sessionChecked = true;
+      }
+    }, 1000); // 1 segundo de timeout (mais rápido)
+
     // Verificar sessão atual
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
+    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
       if (!mounted) return;
+      
       sessionChecked = true;
+      // Limpar timeout
+      clearTimeout(timeoutId);
       
       if (error) {
         console.error('Erro ao verificar sessão:', error);
@@ -56,46 +76,65 @@ export const AuthProvider = ({ children }) => {
         return;
       }
 
+      console.log('Sessão verificada:', session?.user?.id || 'sem usuário');
       setSession(session);
       setUser(session?.user ?? null);
+      
+      // Definir loading como false ANTES de buscar o profile
+      setLoading(false);
+      
+      // Buscar profile em background (não bloquear)
       if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
-        setLoading(false);
+        // Não usar await aqui para não bloquear
+        fetchProfile(session.user.id).catch((err) => {
+          console.error('Erro ao buscar profile:', err);
+        });
       }
-    }).catch((error) => {
-      console.error('Erro ao verificar sessão:', error);
-      if (mounted) {
-        sessionChecked = true;
-        setLoading(false);
-      }
+    }).catch((err) => {
+      if (!mounted) return;
+      sessionChecked = true;
+      clearTimeout(timeoutId);
+      console.error('Erro inesperado ao verificar sessão:', err);
+      setLoading(false);
     });
 
     // Ouvir mudanças de autenticação
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
       
+      // Limpar timeout quando houver mudança de estado
+      clearTimeout(timeoutId);
+      
+      console.log('Auth state changed:', event, session?.user?.id || 'no user');
+      
+      // Atualizar estado imediatamente
       setSession(session);
       setUser(session?.user ?? null);
+      
+      // Definir loading como false ANTES de buscar o profile
+      // para não travar a aplicação se o profile demorar
+      setLoading(false);
+      
+      // Buscar profile em background (não bloquear)
       if (session?.user) {
-        await fetchProfile(session.user.id);
+        // Não usar await aqui para não bloquear
+        fetchProfile(session.user.id).catch((err) => {
+          console.error('Erro ao buscar profile:', err);
+        });
       } else {
+        // Limpar profile quando não há sessão (logout)
         setProfile(null);
-        // Só setar loading como false após verificar a sessão inicial
-        if (sessionChecked) {
-          setLoading(false);
-        }
       }
     });
 
-    // REMOVIDO: Timeout que estava causando acesso sem autenticação
-    // A verificação de sessão deve completar antes de setar loading como false
-
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      clearTimeout(timeoutId);
+      if (subscription) {
+        subscription.unsubscribe();
+      }
     };
   }, []);
 
@@ -107,7 +146,7 @@ export const AuthProvider = ({ children }) => {
         .from('profiles')
         .select('username')
         .eq('username', username)
-        .single();
+        .maybeSingle();
 
       if (existingProfile) {
         return { 
@@ -116,97 +155,74 @@ export const AuthProvider = ({ children }) => {
         };
       }
 
-      // Criar email baseado no username se não fornecido
-      // Usar um domínio válido (Supabase não aceita .local)
-      const userEmail = email || `${username}@watchlist.app`;
-      
       // Criar usuário no Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: userEmail,
+        email,
         password,
       });
 
       if (authError) {
-        // Melhorar mensagem de erro de email inválido
-        if (authError.message?.includes('invalid') || authError.message?.includes('Email')) {
-          throw new Error('Email inválido. Por favor, forneça um email válido ou deixe em branco para usar um email automático.');
+        // Melhorar mensagem de erro
+        let errorMessage = authError.message || 'Erro ao criar conta';
+        if (authError.message?.includes('Database error')) {
+          errorMessage = 'Erro no banco de dados. Verifique se o trigger está configurado corretamente no Supabase.';
+        } else if (authError.message?.includes('User already registered')) {
+          errorMessage = 'Este email já está cadastrado. Tente fazer login.';
+        } else if (authError.message?.includes('Password')) {
+          errorMessage = 'A senha não atende aos requisitos de segurança.';
         }
-        throw authError;
+        return { user: null, error: { message: errorMessage } };
       }
 
       if (!authData.user) {
         return { user: null, error: { message: 'Erro ao criar usuário' } };
       }
 
-      // Aguardar um pouco para o trigger executar e sessão estar ativa
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Aguardar um pouco para o trigger executar
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Verificar se o profile foi criado pelo trigger (tentar algumas vezes)
-      let profileExists = false;
-      let attempts = 0;
-      const maxAttempts = 5;
-      
-      while (!profileExists && attempts < maxAttempts) {
-        const { data: existingProfileCheck, error: checkError } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('id', authData.user.id)
-          .single();
+      // Verificar se o profile foi criado pelo trigger
+      const { data: createdProfile, error: checkError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', authData.user.id)
+        .maybeSingle();
 
-        if (existingProfileCheck && !checkError) {
-          profileExists = true;
-          break;
-        }
-        
-        attempts++;
-        if (attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      }
+      // Se o profile não foi criado pelo trigger, criar usando RPC
+      if (!createdProfile && !checkError) {
+        console.warn('Profile não foi criado pelo trigger, criando via RPC...');
+        const { error: rpcError } = await supabase.rpc('create_user_profile', {
+          p_user_id: authData.user.id,
+          p_email: authData.user.email || email,
+          p_username: username,
+          p_full_name: fullName || null,
+          p_birth_date: birthDate || null,
+        });
 
-      // Se o profile não existe, criar manualmente
-      if (!profileExists) {
-        // Tentar inserir diretamente (requer política de INSERT no RLS)
-        // Não verificar sessão aqui, pois o signUp pode não ter sessão ativa imediatamente
-        // A política RLS vai verificar auth.uid() internamente
-        const { error: insertError } = await supabase
-          .from('profiles')
-          .insert({
-            id: authData.user.id,
-            username,
-            email: userEmail,
-            full_name: fullName || null,
-            birth_date: birthDate || null,
-          });
+        if (rpcError) {
+          console.error('Erro ao criar profile via RPC:', rpcError);
+          // Tentar criar diretamente como último recurso
+          const { error: insertError } = await supabase
+            .from('profiles')
+            .insert({
+              id: authData.user.id,
+              email: authData.user.email || email,
+              username: username,
+              full_name: fullName || null,
+              birth_date: birthDate || null,
+            });
 
-        if (insertError) {
-          console.error('Erro ao criar profile:', insertError);
-          
-          // Verificar se é erro de RLS
-          if (insertError.code === '42501') {
-            throw new Error(
-              'Erro de permissão RLS. Verifique:\n\n' +
-              '1. A política "Users can insert own profile" existe e está ativa\n' +
-              '2. O RLS está habilitado na tabela profiles\n' +
-              '3. A política tem WITH CHECK (auth.uid() = id)\n\n' +
-              'Execute este SQL para verificar:\n' +
-              'SELECT * FROM pg_policies WHERE tablename = \'profiles\';\n\n' +
-              'Se a política não existir, crie:\n' +
-              'CREATE POLICY "Users can insert own profile"\n' +
-              '  ON profiles FOR INSERT\n' +
-              '  WITH CHECK (auth.uid() = id);'
-            );
+          if (insertError) {
+            console.error('Erro ao criar profile diretamente:', insertError);
+            // Continuar mesmo assim, o usuário pode atualizar depois
           }
-          
-          throw new Error(`Erro ao criar perfil: ${insertError.message} (Código: ${insertError.code})`);
         }
-      } else {
-        // Se o profile já existe (criado pelo trigger), apenas atualizar
+      } else if (createdProfile) {
+        // Atualizar profile com dados adicionais se já existe
         const { error: updateError } = await supabase
           .from('profiles')
           .update({
             username,
-            email: userEmail,
             full_name: fullName || null,
             birth_date: birthDate || null,
           })
@@ -214,26 +230,24 @@ export const AuthProvider = ({ children }) => {
 
         if (updateError) {
           console.error('Erro ao atualizar profile:', updateError);
-          // Não falhar o cadastro se o profile não atualizar, mas logar o erro
+          // Tentar usar RPC como fallback
+          await supabase.rpc('create_user_profile', {
+            p_user_id: authData.user.id,
+            p_email: authData.user.email || email,
+            p_username: username,
+            p_full_name: fullName || null,
+            p_birth_date: birthDate || null,
+          });
         }
       }
 
-      // Recarregar profile (se possível)
-      // Nota: Se o email precisar ser confirmado, a sessão pode não estar ativa ainda
-      try {
-        await fetchProfile(authData.user.id);
-      } catch (err) {
-        console.warn('Não foi possível carregar profile imediatamente:', err);
-        // Não falhar o cadastro por isso
-      }
+      // Recarregar profile
+      await fetchProfile(authData.user.id);
 
-      // Retornar usuário criado
-      // Se não houver sessão, o usuário precisará confirmar email e fazer login
       return { user: authData.user, error: null };
     } catch (error) {
       console.error('Erro no cadastro:', error);
-      // Retornar mensagem de erro mais amigável
-      const errorMessage = error.message || error.error_description || 'Erro ao criar conta. Verifique os dados e tente novamente.';
+      const errorMessage = error.message || 'Erro ao criar conta. Verifique os dados e tente novamente.';
       return { user: null, error: { message: errorMessage } };
     }
   };
@@ -247,7 +261,6 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (error) {
-        // Melhorar mensagens de erro
         let errorMessage = error.message;
         if (error.message?.includes('Invalid login credentials') || error.message?.includes('Email not confirmed')) {
           errorMessage = 'Email ou senha incorretos. Verifique suas credenciais.';
@@ -257,8 +270,14 @@ export const AuthProvider = ({ children }) => {
         throw { ...error, message: errorMessage };
       }
 
-      if (data.user) {
-        await fetchProfile(data.user.id);
+      // Atualizar estado imediatamente após login
+      if (data.session) {
+        setSession(data.session);
+        setUser(data.session.user);
+        
+        if (data.session.user) {
+          await fetchProfile(data.session.user.id);
+        }
       }
 
       return { user: data.user, error: null };
@@ -268,100 +287,29 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Login por username (buscar email do profile primeiro)
-  const signInWithUsername = async (username, password) => {
-    try {
-      let email = null;
-
-      // Primeiro tentar usar função RPC se existir (bypass RLS)
-      const { data: rpcData, error: rpcError } = await supabase.rpc('get_user_email_by_username', {
-        p_username: username
-      });
-
-      if (!rpcError && rpcData) {
-        email = rpcData;
-      } else {
-        // Fallback: tentar buscar profile diretamente
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('email')
-          .eq('username', username)
-          .single();
-
-        if (profileError) {
-          console.error('Erro ao buscar profile:', profileError);
-          // Se erro de RLS ou não encontrado, tentar emails padrão
-          if (profileError.code === 'PGRST116' || profileError.code === '42501') {
-            // Tentar emails padrão
-            email = `${username}@watchlist.app`;
-          } else {
-            // Tentar email padrão mesmo com erro
-            email = `${username}@watchlist.app`;
-          }
-        } else if (profileData && profileData.email) {
-          email = profileData.email;
-        } else {
-          email = `${username}@watchlist.app`;
-        }
-      }
-
-      // Tentar login com o email encontrado
-      const result = await signIn(email, password);
-      
-      // Se falhar, tentar variações do email
-      if (result.error) {
-        const emailVariations = [
-          `${username}@watchlist.app`,
-          username.includes('_') ? `${username.replace('_', '')}@watchlist.app` : null,
-          username.includes('_') ? `${username.replace('_', '.')}@watchlist.app` : null,
-        ].filter(Boolean);
-
-        for (const altEmail of emailVariations) {
-          if (altEmail !== email) {
-            const altResult = await signIn(altEmail, password);
-            if (!altResult.error) {
-              return altResult;
-            }
-          }
-        }
-      }
-      
-      return result;
-    } catch (error) {
-      console.error('Erro no login por username:', error);
-      return { 
-        user: null, 
-        error: { message: error.message || 'Erro ao fazer login. Verifique username e senha.' } 
-      };
-    }
-  };
-
   // Logout
   const signOut = async () => {
     try {
+      // Fazer logout no Supabase primeiro
       const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      
+      // Limpar estado local após logout (o onAuthStateChange também vai fazer isso, mas garantimos aqui)
       setUser(null);
       setProfile(null);
+      setSession(null);
+      
+      if (error) {
+        console.error('Erro no logout do Supabase:', error);
+        return { error };
+      }
+      
       return { error: null };
     } catch (error) {
-      console.error('Erro no logout:', error);
-      return { error };
-    }
-  };
-
-  // Reset de senha (esqueci minha senha)
-  const resetPassword = async (email) => {
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/login`,
-      });
-
-      if (error) throw error;
-
-      return { error: null };
-    } catch (error) {
-      console.error('Erro ao enviar email de reset:', error);
+      console.error('Erro inesperado no logout:', error);
+      // Mesmo em caso de erro, limpar estado local
+      setUser(null);
+      setProfile(null);
+      setSession(null);
       return { error };
     }
   };
@@ -373,10 +321,8 @@ export const AuthProvider = ({ children }) => {
     loading,
     signUp,
     signIn,
-    signInWithUsername,
     signOut,
     fetchProfile,
-    resetPassword,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

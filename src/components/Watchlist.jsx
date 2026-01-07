@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import { Trash2, Film, Loader2, CheckCircle, Moon, Sun } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -13,28 +13,44 @@ const Watchlist = () => {
   const [removingId, setRemovingId] = useState(null);
 
   // Função para buscar os filmes do Supabase
-  const fetchWatchlist = async () => {
-    if (!user) return;
-    
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('watchlist')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Erro ao carregar lista:', error);
-      toast.error(`Erro ao carregar lista: ${error.message}`);
-    } else {
-      // Filtrar apenas filmes que aparecem na lista: status = 'listed' ou 'both'
-      const filteredMovies = (data || []).filter(movie => 
-        movie.status === 'listed' || movie.status === 'both'
-      );
-      setMovies(filteredMovies);
+  const fetchWatchlist = useCallback(async () => {
+    if (!user) {
+      setLoading(false);
+      return;
     }
-    setLoading(false);
-  };
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('watchlist')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar lista:', error);
+        // Se for erro 406
+        if (error.code === 'PGRST301' || error.message?.includes('406')) {
+          toast.error('Erro ao processar requisição. Tente novamente.');
+        } else {
+          toast.error(`Erro ao carregar lista: ${error.message}`);
+        }
+        setMovies([]);
+      } else {
+        // Filtrar apenas filmes que aparecem na lista: status = 'listed' ou 'both'
+        const filteredMovies = (data || []).filter(movie => 
+          movie.status === 'listed' || movie.status === 'both'
+        );
+        setMovies(filteredMovies);
+      }
+    } catch (err) {
+      console.error('Erro inesperado ao carregar lista:', err);
+      toast.error('Erro inesperado ao carregar lista');
+      setMovies([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
 
   // Função para marcar/desmarcar como assistido
   const toggleWatched = async (movieId) => {
@@ -63,7 +79,12 @@ const Watchlist = () => {
 
       if (error) {
         console.error('Erro ao atualizar status:', error);
-        toast.error(`Erro ao atualizar status: ${error.message}`);
+        // Se for erro 406
+        if (error.code === 'PGRST301' || error.message?.includes('406')) {
+          toast.error('Erro ao processar requisição. Tente novamente.');
+        } else {
+          toast.error(`Erro ao atualizar status: ${error.message}`);
+        }
       } else {
         // Atualizar localmente para feedback imediato
         setMovies(movies.map(m => 
@@ -99,7 +120,14 @@ const Watchlist = () => {
 
       if (error) {
         console.error('Erro ao remover filme:', error);
-        toast.error(`Erro ao remover filme: ${error.message}`);
+        // Se for erro 406
+        if (error.code === 'PGRST301' || error.message?.includes('406')) {
+          toast.error('Erro ao processar requisição. Tente novamente.');
+        } else {
+          toast.error(`Erro ao remover filme: ${error.message}`);
+        }
+        setRemovingId(null);
+        return;
       } else {
         // Recarrega a lista após deletar
         await fetchWatchlist();
@@ -120,8 +148,34 @@ const Watchlist = () => {
   useEffect(() => {
     if (user) {
       fetchWatchlist();
+    } else {
+      setLoading(false);
+      setMovies([]);
     }
-  }, [user]);
+  }, [user, fetchWatchlist]);
+
+  // Recarregar lista quando a janela volta ao foco
+  useEffect(() => {
+    const handleFocus = () => {
+      // Recarregar lista quando volta ao foco
+      fetchWatchlist();
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        // Recarregar lista quando página fica visível
+        fetchWatchlist();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [fetchWatchlist]);
 
   if (loading) return <div className="p-10 text-center text-gray-500 dark:text-gray-400">Carregando sua lista...</div>;
 

@@ -28,30 +28,52 @@ const MovieRandomizer = () => {
   useEffect(() => {
     if (user) {
       fetchWatchlist();
+    } else {
+      setLoading(false);
+      setWatchlist([]);
+      setFilteredMovies([]);
     }
   }, [user]);
 
   const fetchWatchlist = async () => {
-    if (!user) return;
-    
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('watchlist')
-      .select('*')
-      .eq('user_id', user.id);
-      
-    if (!error) {
-      // Filtrar apenas filmes que estão na lista E não estão assistidos
-      // Status 'listed' = na lista e não assistido (pode ser sorteado)
-      // Status 'both' = na lista mas também assistido (não deve ser sorteado)
-      // Status 'watched' = apenas assistido, não na lista (não deve ser sorteado)
-      const availableMovies = (data || []).filter(movie => 
-        movie.status === 'listed'
-      );
-      setWatchlist(availableMovies);
-      setFilteredMovies(availableMovies);
+    if (!user) {
+      setLoading(false);
+      return;
     }
-    setLoading(false);
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('watchlist')
+        .select('*')
+        .eq('user_id', user.id);
+        
+      if (error) {
+        console.error('Erro ao carregar lista:', error);
+        // Se for erro 406, pode ser problema de sessão
+        if (error.code === 'PGRST301' || error.message?.includes('406')) {
+          console.warn('Erro ao carregar lista');
+        }
+        setWatchlist([]);
+        setFilteredMovies([]);
+      } else {
+        // Filtrar apenas filmes que estão na lista E não estão assistidos
+        // Status 'listed' = na lista e não assistido (pode ser sorteado)
+        // Status 'both' = na lista mas também assistido (não deve ser sorteado)
+        // Status 'watched' = apenas assistido, não na lista (não deve ser sorteado)
+        const availableMovies = (data || []).filter(movie => 
+          movie.status === 'listed'
+        );
+        setWatchlist(availableMovies);
+        setFilteredMovies(availableMovies);
+      }
+    } catch (err) {
+      console.error('Erro inesperado ao carregar lista:', err);
+      setWatchlist([]);
+      setFilteredMovies([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const applyFilters = () => {

@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, Navigate, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import MovieSearch from "./components/MovieSearch"; 
 import MovieRandomizer from "./components/MovieRandomizer";
@@ -10,22 +10,45 @@ import { useTheme } from './contexts/ThemeContext';
 import { useAuth } from './contexts/AuthContext';
 import toast from 'react-hot-toast';
 
-function App() {
+function AppContent() {
   const { isDark, toggleTheme } = useTheme();
   const { user, profile, loading, signOut } = useAuth();
+  const navigate = useNavigate();
 
   const handleLogout = async () => {
-    const { error } = await signOut();
-    if (error) {
+    try {
+      const { error } = await signOut();
+      if (error) {
+        toast.error('Erro ao fazer logout');
+        console.error('Erro no logout:', error);
+      } else {
+        toast.success('Logout realizado com sucesso');
+        // Aguardar um pouco para garantir que o estado foi atualizado
+        setTimeout(() => {
+          navigate('/login', { replace: true });
+          // Forçar reload se o navigate não funcionar
+          setTimeout(() => {
+            if (window.location.pathname !== '/login') {
+              window.location.href = '/login';
+            }
+          }, 100);
+        }, 100);
+      }
+    } catch (err) {
+      console.error('Erro inesperado no logout:', err);
       toast.error('Erro ao fazer logout');
-    } else {
-      toast.success('Logout realizado com sucesso');
+      // Mesmo em caso de erro, tentar redirecionar
+      navigate('/login', { replace: true });
+      setTimeout(() => {
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+      }, 100);
     }
   };
 
   return (
-    <Router>
-      <div className={`min-h-screen w-full bg-gray-50 dark:bg-gray-900 transition-colors overflow-x-hidden ${user ? 'pt-16 pb-20' : 'pb-20'}`}> {/* pt-16 para header, pb-20 para menu no mobile */}
+    <div className={`min-h-screen w-full bg-gray-50 dark:bg-gray-900 transition-colors overflow-x-hidden ${user ? 'pt-16 pb-20' : 'pb-20'}`}> {/* pt-16 para header, pb-20 para menu no mobile */}
         <Toaster 
           position="top-right"
           toastOptions={{
@@ -149,6 +172,13 @@ function App() {
           </nav>
         )}
       </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AppContent />
     </Router>
   );
 }
