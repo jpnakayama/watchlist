@@ -143,18 +143,17 @@ const MovieSearch = () => {
       const sortToUse = sortFilter !== null ? sortFilter : sortBy;
       const countryToUse = countryFilter !== null ? countryFilter : selectedCountry;
       
-      // Sempre carregar 50 páginas por vez (1000 filmes)
-      const maxPages = 50;
-      // Calcular quais páginas carregar baseado na página virtual atual
-      // Página virtual 1 = páginas 1-50 da API, Página virtual 2 = páginas 51-100, etc.
-      const startPage = (pageNum - 1) * maxPages + 1;
+      // Carregar TODAS as páginas disponíveis (até 500 páginas = 10.000 filmes)
+      const maxPages = 500; // Máximo permitido pela API
+      // Sempre começar da página 1 quando for reset ou primeira carga
+      const startPage = (reset || pageNum === 1) ? 1 : (pageNum - 1) * 50 + 1;
       
       let allResults = [];
       let totalPagesFromAPI = 500; // Valor inicial, será atualizado na primeira requisição
       
-      // Carregar todas as páginas necessárias (até 50 páginas)
+      // Carregar todas as páginas em lotes paralelos
       // Usar Promise.all para carregar páginas em paralelo (em lotes para não sobrecarregar)
-      const batchSize = 10; // Carregar 10 páginas por vez em paralelo
+      const batchSize = 20; // Carregar 20 páginas por vez em paralelo (aumentado para melhor performance)
       let totalPagesFromAPITemp = 500; // Valor inicial
       
       for (let batchStart = 0; batchStart < maxPages; batchStart += batchSize) {
@@ -274,6 +273,11 @@ const MovieSearch = () => {
         if (startPage + batchEnd > totalPagesFromAPI) {
           break;
         }
+        
+        // Mostrar progresso no console
+        if (batchStart % 100 === 0 || batchEnd >= totalPagesFromAPI) {
+          console.log(`Carregando... ${allResults.length} filmes carregados até agora (${Math.round((batchEnd / totalPagesFromAPI) * 100)}% concluído)`);
+        }
       }
       
       totalPagesFromAPI = totalPagesFromAPITemp;
@@ -308,28 +312,14 @@ const MovieSearch = () => {
       );
       
       // Debug: log temporário para verificar quantos filmes foram carregados
-      console.log(`Carregados: ${allResults.length} filmes brutos, ${filteredResults.length} após filtros, ${uniqueMovies.length} únicos`);
+      console.log(`✅ Carregamento completo: ${allResults.length} filmes brutos, ${filteredResults.length} após filtros, ${uniqueMovies.length} únicos`);
       
-      // Se for reset ou primeira página, substituir todos os filmes filtrados
-      // Caso contrário, adicionar aos existentes (para carregar mais páginas da API)
-      if (reset || pageNum === 1) {
-        setAllFilteredMovies(uniqueMovies);
-        setPage(1); // Resetar para página 1 quando carregar novos filmes
-      } else {
-        setAllFilteredMovies(prev => {
-          const combined = [...prev, ...uniqueMovies];
-          // Remover duplicatas também ao adicionar
-          return combined.filter((movie, index, self) =>
-            index === self.findIndex(m => m.id === movie.id)
-          );
-        });
-      }
+      // Sempre substituir todos os filmes quando carregar tudo
+      setAllFilteredMovies(uniqueMovies);
+      setPage(1); // Resetar para página 1
       
-      // Calcular quantas "páginas virtuais" temos (cada uma representa 50 páginas da API)
-      const virtualTotalPages = Math.ceil(totalPagesFromAPI / maxPages);
-      
-      // Verificar se há mais páginas da API para carregar
-      setHasMore(pageNum < virtualTotalPages);
+      // Não há mais páginas para carregar (já carregamos tudo)
+      setHasMore(false);
       
       // Recarregar a watchlist para verificar filmes já adicionados
       await fetchWatchlist();

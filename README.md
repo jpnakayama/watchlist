@@ -37,6 +37,7 @@ Uma aplicação web moderna para gerenciar sua lista de filmes favoritos, com bu
   - Carregamento paralelo de páginas
   - Cancelamento de requisições duplicadas
   - Debounce na busca
+  - Carregamento completo do catálogo (até 10.000 filmes)
 
 ## 🛠️ Tecnologias
 
@@ -77,19 +78,48 @@ CREATE TABLE IF NOT EXISTS profiles (
 );
 ```
 
-2. **Adicionar coluna `user_id` na tabela `watchlist`** (se ainda não existir):
+2. **Criar/Configurar tabela `watchlist`** (se ainda não existir):
 ```sql
--- Adicionar coluna como nullable primeiro
+-- Criar tabela watchlist se não existir
+CREATE TABLE IF NOT EXISTS watchlist (
+  movie_id INTEGER NOT NULL,
+  user_id UUID NOT NULL REFERENCES auth.users(id),
+  title TEXT,
+  poster_path TEXT,
+  status TEXT CHECK (status IN ('listed', 'watched', 'both')) DEFAULT 'listed',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  PRIMARY KEY (movie_id, user_id)
+);
+
+-- Adicionar coluna user_id se a tabela já existir sem ela
 ALTER TABLE watchlist 
 ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id);
 
--- Criar índice
+-- Criar índices para performance
 CREATE INDEX IF NOT EXISTS idx_watchlist_user_id ON watchlist(user_id);
+CREATE INDEX IF NOT EXISTS idx_watchlist_movie_id ON watchlist(movie_id);
+CREATE INDEX IF NOT EXISTS idx_watchlist_movie_user ON watchlist(movie_id, user_id);
+
+-- IMPORTANTE: Corrigir PRIMARY KEY para permitir mesmo filme para usuários diferentes
+-- Remover PRIMARY KEY antiga se estiver apenas em movie_id
+ALTER TABLE watchlist DROP CONSTRAINT IF EXISTS watchlist_pkey;
+
+-- Criar PRIMARY KEY composta (movie_id, user_id)
+-- Isso permite que o mesmo filme seja adicionado por diferentes usuários
+ALTER TABLE watchlist 
+ADD CONSTRAINT watchlist_pkey PRIMARY KEY (movie_id, user_id);
+
+-- Criar constraint UNIQUE composta (opcional, mas recomendado)
+ALTER TABLE watchlist 
+DROP CONSTRAINT IF EXISTS watchlist_movie_user_unique;
+
+ALTER TABLE watchlist 
+ADD CONSTRAINT watchlist_movie_user_unique UNIQUE (movie_id, user_id);
 
 -- Deletar registros antigos (se houver) ou atribuir a um usuário
 DELETE FROM watchlist WHERE user_id IS NULL;
 
--- Alterar para NOT NULL
+-- Alterar para NOT NULL se ainda não estiver
 ALTER TABLE watchlist 
 ALTER COLUMN user_id SET NOT NULL;
 ```
@@ -216,7 +246,9 @@ watchlist-app/
 ### Busca de Filmes
 - Busca em tempo real com debounce de 500ms
 - Cancelamento automático de requisições sobrepostas
-- Carregamento de até 1000 filmes iniciais (50 páginas)
+- Carregamento completo do catálogo (até 500 páginas = 10.000 filmes)
+- Carregamento em lotes paralelos para melhor performance
+- Logs de progresso durante o carregamento
 
 ### Filtros
 - **Gênero**: Filtra por gênero cinematográfico
@@ -239,7 +271,10 @@ watchlist-app/
 - Adicionar filmes à lista pessoal
 - Visualizar lista completa
 - Remover filmes da lista
+- Marcar filmes como assistidos
 - Persistência no Supabase
+- **Suporte a múltiplos usuários**: O mesmo filme pode ser adicionado por diferentes usuários
+- Isolamento completo de dados por usuário
 
 ### Sorteador
 - Sorteia um filme aleatório da sua lista
@@ -377,9 +412,16 @@ Após publicar no Vercel, você pode instalar o app no seu celular:
 
 ### PWA
 - ✅ Configuração completa de Progressive Web App
-- ✅ Ícone personalizado (icon.png)
+- ✅ Ícone personalizado (icon.png) configurado como favicon e app icon
+- ✅ Suporte a múltiplos tamanhos de ícone
 - ✅ Tema escuro como padrão
 - ✅ Atualização automática
+
+### Banco de Dados
+- ✅ PRIMARY KEY composta (movie_id, user_id) permite mesmo filme para usuários diferentes
+- ✅ Constraint UNIQUE composta garante que cada usuário só pode adicionar o mesmo filme uma vez
+- ✅ Índices otimizados para consultas rápidas
+- ✅ Row Level Security (RLS) configurado para isolamento de dados
 
 ### UX/UI
 - ✅ Modo escuro/claro com toggle
