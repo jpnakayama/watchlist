@@ -1,10 +1,58 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import axios from 'axios';
-import { PlusCircle, Loader2, CheckCircle, Film, Search, Filter, X, Info, XCircle, Grid3x3, List, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Moon, Sun, Bookmark, Eye } from 'lucide-react';
+import { PlusCircle, Loader2, CheckCircle, Film, Search, Filter, X, Info, XCircle, Grid3x3, List, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Moon, Sun, Bookmark, Eye, Plus } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import toast from 'react-hot-toast';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+
+// Listas de diretores, atores e franquias principais
+const POPULAR_DIRECTORS = [
+  { id: 1032, name: 'Christopher Nolan' },
+  { id: 525, name: 'Quentin Tarantino' },
+  { id: 2710, name: 'Martin Scorsese' },
+  { id: 18897, name: 'Steven Spielberg' },
+  { id: 108916, name: 'Denis Villeneuve' },
+  { id: 17825, name: 'Ridley Scott' },
+  { id: 19292, name: 'David Fincher' },
+  { id: 2, name: 'James Cameron' },
+  { id: 12891, name: 'Peter Jackson' },
+  { id: 9066, name: 'Tim Burton' },
+  { id: 1243, name: 'Clint Eastwood' },
+  { id: 1160, name: 'Ridley Scott' },
+  { id: 1813, name: 'Wes Anderson' },
+  { id: 1776, name: 'Paul Thomas Anderson' },
+  { id: 1271, name: 'Coen Brothers' },
+  { id: 2231, name: 'Spike Lee' },
+  { id: 90633, name: 'Bong Joon-ho' },
+  { id: 1100, name: 'Alejandro González Iñárritu' },
+  { id: 190, name: 'Alfonso Cuarón' },
+  { id: 11856, name: 'Guillermo del Toro' }
+];
+
+const POPULAR_CAST = [
+  { id: 6193, name: 'Leonardo DiCaprio' },
+  { id: 500, name: 'Tom Cruise' },
+  { id: 287, name: 'Brad Pitt' },
+  { id: 31, name: 'Tom Hanks' },
+  { id: 3223, name: 'Robert Downey Jr.' },
+  { id: 1245, name: 'Scarlett Johansson' },
+  { id: 976, name: 'Jennifer Lawrence' },
+  { id: 514, name: 'Johnny Depp' },
+  { id: 3896, name: 'Will Smith' },
+  { id: 1136406, name: 'Tom Holland' },
+  { id: 117642, name: 'Jason Momoa' },
+  { id: 172069, name: 'Chris Hemsworth' },
+  { id: 74568, name: 'Chris Evans' },
+  { id: 550843, name: 'Margot Robbie' },
+  { id: 115440, name: 'Gal Gadot' },
+  { id: 234352, name: 'Brie Larson' },
+  { id: 54693, name: 'Emma Stone' },
+  { id: 11701, name: 'Natalie Portman' },
+  { id: 1813, name: 'Meryl Streep' },
+  { id: 5149, name: 'Cate Blanchett' }
+];
+
 
 const MovieSearch = () => {
   const { isDark, toggleTheme } = useTheme();
@@ -33,6 +81,14 @@ const MovieSearch = () => {
   const [countries, setCountries] = useState([]);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   
+  // Estados temporários para filtros (antes de aplicar)
+  const [tempGenre, setTempGenre] = useState('');
+  const [tempYear, setTempYear] = useState('');
+  const [tempSortBy, setTempSortBy] = useState('popularity.desc');
+  const [tempCountry, setTempCountry] = useState('');
+  // Estado para tipo de busca (filme, diretor, elenco)
+  const [searchType, setSearchType] = useState('movie'); // 'movie', 'director', 'cast'
+  
   // Estados do modal de detalhes
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [movieDetails, setMovieDetails] = useState(null);
@@ -53,7 +109,24 @@ const MovieSearch = () => {
     fetchGenres();
     fetchCountries();
     loadMovies(1);
+    
+    // Inicializar estados temporários com os valores iniciais
+    setTempGenre('');
+    setTempYear('');
+    setTempSortBy('popularity.desc');
+    setTempCountry('');
   }, [user]);
+
+  // Sincronizar estados temporários com os filtros aplicados quando os filtros são expandidos
+  useEffect(() => {
+    if (filtersExpanded) {
+      setTempGenre(selectedGenre);
+      setTempYear(selectedYear);
+      setTempSortBy(sortBy);
+      setTempCountry(selectedCountry);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtersExpanded]); // Sincronizar apenas quando expandir, não quando os filtros mudarem
 
   const fetchGenres = async () => {
     try {
@@ -142,6 +215,85 @@ const MovieSearch = () => {
       const yearToUse = yearFilter !== null ? yearFilter : selectedYear;
       const sortToUse = sortFilter !== null ? sortFilter : sortBy;
       const countryToUse = countryFilter !== null ? countryFilter : selectedCountry;
+      // Se houver busca, tratar de acordo com o tipo selecionado
+      const trimmedQuery = queryToUse ? queryToUse.trim() : '';
+      if (trimmedQuery && searchType !== 'movie') {
+        // Buscar por diretor ou elenco
+        try {
+          const personSearch = await axios.get(`https://api.themoviedb.org/3/search/person`, {
+            params: {
+              api_key: import.meta.env.VITE_TMDB_API_KEY,
+              query: trimmedQuery,
+              language: 'pt-BR',
+              page: 1
+            },
+            signal
+          });
+          
+          // Se encontrou pessoa, buscar filmes dela
+          if (personSearch.data.results && personSearch.data.results.length > 0) {
+            const person = personSearch.data.results[0];
+            const personId = person.id;
+            
+            // Buscar créditos da pessoa
+            const creditsResponse = await axios.get(`https://api.themoviedb.org/3/person/${personId}/movie_credits`, {
+              params: {
+                api_key: import.meta.env.VITE_TMDB_API_KEY,
+                language: 'pt-BR'
+              },
+              signal
+            });
+            
+            // Filtrar por tipo: diretor ou elenco
+            let personMovies = [];
+            if (searchType === 'director') {
+              personMovies = (creditsResponse.data.crew || []).filter(m => m.job === 'Director');
+            } else if (searchType === 'cast') {
+              personMovies = creditsResponse.data.cast || [];
+            }
+            
+            // Filtrar filmes com base na qualidade
+            let filteredMovies = personMovies.filter(movie => {
+              return movie.vote_count >= 50 && movie.vote_average >= 4.0;
+            });
+            
+            // Aplicar ordenação
+            if (sortToUse) {
+              filteredMovies = [...filteredMovies].sort((a, b) => {
+                if (sortToUse === 'popularity.desc') {
+                  return (b.popularity || 0) - (a.popularity || 0);
+                } else if (sortToUse === 'vote_average.desc') {
+                  return (b.vote_average || 0) - (a.vote_average || 0);
+                } else if (sortToUse === 'release_date.desc') {
+                  return new Date(b.release_date || 0) - new Date(a.release_date || 0);
+                } else if (sortToUse === 'release_date.asc') {
+                  return new Date(a.release_date || 0) - new Date(b.release_date || 0);
+                } else if (sortToUse === 'title.asc') {
+                  return (a.title || '').localeCompare(b.title || '');
+                } else if (sortToUse === 'title.desc') {
+                  return (b.title || '').localeCompare(a.title || '');
+                }
+                return 0;
+              });
+            }
+            
+            setAllFilteredMovies(filteredMovies);
+            setPage(1);
+            setHasMore(false);
+            await fetchWatchlist();
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          if (axios.isCancel(err) || err.name === 'AbortError') {
+            return;
+          }
+          // Se der erro ao buscar pessoa, mostrar erro e parar
+          console.error("Erro ao buscar pessoa:", err);
+          setLoading(false);
+          return;
+        }
+      }
       
       // Carregar TODAS as páginas disponíveis (até 500 páginas = 10.000 filmes)
       const maxPages = 500; // Máximo permitido pela API
@@ -167,12 +319,12 @@ const MovieSearch = () => {
             try {
               let response;
               
-              if (queryToUse && queryToUse.trim()) {
-                // Modo busca
+              if (trimmedQuery) {
+                // Modo busca por filme (pessoa já foi tratada antes do loop)
                 response = await axios.get(`https://api.themoviedb.org/3/search/movie`, {
                   params: {
                     api_key: import.meta.env.VITE_TMDB_API_KEY,
-                    query: queryToUse,
+                    query: trimmedQuery,
                     language: 'pt-BR',
                     page: page,
                     include_adult: false
@@ -218,6 +370,9 @@ const MovieSearch = () => {
                 if (countryToUse) {
                   params.with_origin_country = countryToUse;
                 }
+                
+                // Filtro de franquia é tratado antes (busca direta da coleção)
+                // Não precisa adicionar aqui
                 
                 response = await axios.get(`https://api.themoviedb.org/3/discover/movie`, { 
                   params,
@@ -274,10 +429,6 @@ const MovieSearch = () => {
           break;
         }
         
-        // Mostrar progresso no console
-        if (batchStart % 100 === 0 || batchEnd >= totalPagesFromAPI) {
-          console.log(`Carregando... ${allResults.length} filmes carregados até agora (${Math.round((batchEnd / totalPagesFromAPI) * 100)}% concluído)`);
-        }
       }
       
       totalPagesFromAPI = totalPagesFromAPITemp;
@@ -289,7 +440,8 @@ const MovieSearch = () => {
       const sortForFilter = sortFilter !== null ? sortFilter : sortBy;
       
       // Filtrar filmes não lançados
-      if (sortForFilter === 'release_date.desc' || (queryToUse && queryToUse.trim())) {
+      const hasSearchQuery = queryToUse && queryToUse.trim();
+      if (sortForFilter === 'release_date.desc' || hasSearchQuery) {
         const today = new Date().toISOString().split('T')[0];
         filteredResults = filteredResults.filter(movie => {
           if (!movie.release_date) return false;
@@ -311,8 +463,6 @@ const MovieSearch = () => {
         index === self.findIndex(m => m.id === movie.id)
       );
       
-      // Debug: log temporário para verificar quantos filmes foram carregados
-      console.log(`✅ Carregamento completo: ${allResults.length} filmes brutos, ${filteredResults.length} após filtros, ${uniqueMovies.length} únicos`);
       
       // Sempre substituir todos os filmes quando carregar tudo
       setAllFilteredMovies(uniqueMovies);
@@ -356,6 +506,56 @@ const MovieSearch = () => {
   const clientFilteredMovies = useMemo(() => {
     let filtered = allFilteredMovies;
 
+    // Se estiver em modo de busca, aplicar filtros client-side
+    if (isSearchMode) {
+      // Filtro de gênero
+      if (selectedGenre) {
+        const genreId = parseInt(selectedGenre);
+        filtered = filtered.filter(movie => 
+          movie.genre_ids && movie.genre_ids.includes(genreId)
+        );
+      }
+
+      // Filtro de ano
+      if (selectedYear) {
+        filtered = filtered.filter(movie => 
+          movie.release_date && movie.release_date.startsWith(selectedYear)
+        );
+      }
+
+      // Filtro de país (nacionalidade)
+      if (selectedCountry) {
+        filtered = filtered.filter(movie => {
+          if (!movie.origin_country) return false;
+          // origin_country pode ser um array ou string
+          if (Array.isArray(movie.origin_country)) {
+            return movie.origin_country.includes(selectedCountry);
+          }
+          return movie.origin_country === selectedCountry;
+        });
+      }
+
+      // Ordenação client-side
+      if (sortBy) {
+        filtered = [...filtered].sort((a, b) => {
+          if (sortBy === 'popularity.desc') {
+            return (b.popularity || 0) - (a.popularity || 0);
+          } else if (sortBy === 'vote_average.desc') {
+            return (b.vote_average || 0) - (a.vote_average || 0);
+          } else if (sortBy === 'release_date.desc') {
+            return new Date(b.release_date || 0) - new Date(a.release_date || 0);
+          } else if (sortBy === 'release_date.asc') {
+            return new Date(a.release_date || 0) - new Date(b.release_date || 0);
+          } else if (sortBy === 'title.asc') {
+            return (a.title || '').localeCompare(b.title || '');
+          } else if (sortBy === 'title.desc') {
+            return (b.title || '').localeCompare(a.title || '');
+          }
+          return 0;
+        });
+      }
+    }
+
     // Filtro: apenas na lista
     if (filterInList) {
       filtered = filtered.filter(movie => isInWatchlist(movie.id));
@@ -366,11 +566,8 @@ const MovieSearch = () => {
       filtered = filtered.filter(movie => isWatched(movie.id));
     }
 
-    // Filtro: nacionalidade já é aplicado na API via with_origin_country
-    // Não precisa filtrar client-side novamente
-
     return filtered;
-  }, [allFilteredMovies, filterInList, filterWatched, watchlist, watchedMovies]);
+  }, [allFilteredMovies, isSearchMode, selectedGenre, selectedYear, selectedCountry, sortBy, filterInList, filterWatched, watchlist, watchedMovies]);
 
   // Calcular filmes a exibir na página atual (paginação client-side)
   const currentPageMovies = useMemo(() => {
@@ -413,44 +610,58 @@ const MovieSearch = () => {
     }
   };
 
-  // Busca com debounce
+  // Busca com debounce (mais rápido)
   const debouncedSearch = (query) => {
     // Limpar timeout anterior
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
     
-    // Se a query estiver vazia, voltar ao modo catálogo
-    if (!query.trim()) {
+    // Se a query estiver vazia, voltar ao modo catálogo imediatamente
+    if (!query || !query.trim()) {
       setIsSearchMode(false);
       setPage(1);
-      loadMovies(1, true);
+      // Passar string vazia explicitamente para garantir que não use busca
+      loadMovies(1, true, '', null, null, null, null);
       return;
     }
     
-    // Criar novo timeout
+    // Para busca por diretor ou elenco, usar debounce menor (200ms) para resposta mais rápida
+    // Para busca por filme, usar debounce normal (300ms)
+    const debounceTime = searchType !== 'movie' ? 200 : 300;
+    
+    // Criar novo timeout com debounce
     searchTimeoutRef.current = setTimeout(() => {
       setIsSearchMode(true);
       setPage(1);
-      loadMovies(1, true, query);
-    }, 500); // 500ms de debounce
+      loadMovies(1, true, query.trim());
+    }, debounceTime);
   };
 
-  const handleSearch = (e) => {
-    e.preventDefault();
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    debouncedSearch(value);
+  };
+
+  const clearSearch = () => {
     // Limpar timeout se houver
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
+      searchTimeoutRef.current = null;
     }
-    // Executar busca imediatamente no submit
-    if (searchQuery.trim()) {
-      setIsSearchMode(true);
-      setPage(1);
-      loadMovies(1, true, searchQuery);
-    }
+    
+    // Atualizar estados primeiro
+    setSearchQuery('');
+    setIsSearchMode(false);
+    setPage(1);
+    
+    // Forçar recarregamento imediato - passar string vazia explicitamente
+    // para garantir que não use busca, mesmo que o estado ainda não tenha sido atualizado
+    loadMovies(1, true, '', null, null, null, null);
   };
   
-  // Limpar timeout ao desmontar
+  // Limpar timeouts e abort controller ao desmontar
   useEffect(() => {
     return () => {
       if (searchTimeoutRef.current) {
@@ -462,33 +673,52 @@ const MovieSearch = () => {
     };
   }, []);
 
-  const handleFilterChange = (newGenre = null, newYear = null, newSortBy = null, newCountry = null) => {
-    setIsSearchMode(false);
+  const applyFilters = () => {
     setPage(1);
     
-    // Atualizar estados primeiro
-    if (newGenre !== null) setSelectedGenre(newGenre);
-    if (newYear !== null) setSelectedYear(newYear);
-    if (newSortBy !== null) setSortBy(newSortBy);
-    if (newCountry !== null) setSelectedCountry(newCountry);
+    // Aplicar os valores temporários aos estados reais
+    setSelectedGenre(tempGenre);
+    setSelectedYear(tempYear);
+    setSortBy(tempSortBy);
+    setSelectedCountry(tempCountry);
     
-    // Carregar filmes com os valores passados diretamente (não esperar atualização do estado)
-    loadMovies(1, true, null, 
-      newGenre !== null ? newGenre : selectedGenre, 
-      newYear !== null ? newYear : selectedYear, 
-      newSortBy !== null ? newSortBy : sortBy,
-      newCountry !== null ? newCountry : selectedCountry
-    );
+    // Se estiver em modo de busca, manter a busca e aplicar filtros client-side
+    // Caso contrário, recarregar da API com os filtros
+    if (isSearchMode && searchQuery.trim()) {
+      // Manter modo de busca - os filtros serão aplicados client-side no useMemo
+      // Não precisa recarregar da API
+    } else {
+      // Sair do modo de busca e carregar com filtros da API
+      setIsSearchMode(false);
+      loadMovies(1, true, null, tempGenre, tempYear, tempSortBy, tempCountry);
+    }
   };
 
-  const clearFilters = () => {
+  const clearFilters = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    // Limpar estados temporários primeiro
+    setTempGenre('');
+    setTempYear('');
+    setTempSortBy('popularity.desc');
+    setTempCountry('');
+    
+    // Limpar todos os estados reais
     setSearchQuery('');
     setSelectedGenre('');
     setSelectedYear('');
     setSortBy('popularity.desc');
+    setSelectedCountry('');
+    setFilterInList(false);
+    setFilterWatched(false);
     setIsSearchMode(false);
     setPage(1);
-    loadMovies(1, true);
+    
+    // Carregar filmes sem filtros - usar valores explícitos
+    loadMovies(1, true, '', '', '', 'popularity.desc', '');
   };
 
   const hasActiveFilters = searchQuery || selectedGenre || selectedYear || sortBy !== 'popularity.desc';
@@ -811,25 +1041,63 @@ const MovieSearch = () => {
         {/* Linha superior: Busca + Controles */}
         <div className="flex flex-col md:flex-row md:items-center gap-3 p-4 border-b border-gray-100 dark:border-gray-700">
           {/* Busca */}
-          <form onSubmit={handleSearch} className="flex-1 relative w-full md:w-auto">
+          <div className="flex-1 relative w-full md:w-auto">
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                debouncedSearch(e.target.value);
-              }}
+              onChange={handleSearchChange}
               placeholder="Busque um filme..."
-              className="w-full p-3 pl-10 pr-20 rounded-lg bg-gray-100 dark:bg-gray-700 border-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+              className="w-full p-3 pl-10 pr-10 rounded-lg bg-gray-100 dark:bg-gray-700 border-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
             />
             <Search className="absolute left-3 top-3.5 text-gray-400 dark:text-gray-500" size={18} />
-            <button 
-              type="submit"
-              className="absolute right-2 top-2 bg-blue-600 dark:bg-blue-500 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition text-sm"
-            >
-              Buscar
-            </button>
-          </form>
+            {searchQuery && (
+              <button 
+                type="button"
+                onClick={clearSearch}
+                className="absolute right-2 top-2.5 p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition"
+                title="Limpar busca"
+              >
+                <X size={18} />
+              </button>
+            )}
+          </div>
+
+          {/* Radio buttons para tipo de busca */}
+          <div className="flex items-center gap-4 text-sm">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="searchType"
+                value="movie"
+                checked={searchType === 'movie'}
+                onChange={(e) => setSearchType(e.target.value)}
+                className="cursor-pointer"
+              />
+              <span className="text-gray-700 dark:text-gray-300">Filme</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="searchType"
+                value="director"
+                checked={searchType === 'director'}
+                onChange={(e) => setSearchType(e.target.value)}
+                className="cursor-pointer"
+              />
+              <span className="text-gray-700 dark:text-gray-300">Diretor</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="searchType"
+                value="cast"
+                checked={searchType === 'cast'}
+                onChange={(e) => setSearchType(e.target.value)}
+                className="cursor-pointer"
+              />
+              <span className="text-gray-700 dark:text-gray-300">Elenco</span>
+            </label>
+          </div>
 
           {/* Filtros e Visualização */}
           <div className="flex items-center justify-between gap-3 w-full md:w-auto">
@@ -872,114 +1140,128 @@ const MovieSearch = () => {
         {/* Filtros (recolhível) */}
         {filtersExpanded && (
           <div className="p-4 bg-gray-50 dark:bg-gray-900/50">
-            <div className="flex flex-col md:flex-row md:flex-nowrap md:items-center gap-3 md:overflow-x-auto">
-              {/* Gênero */}
-              <div className="flex flex-col md:flex-row md:items-center gap-2 flex-shrink-0">
-                <label className="text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">Gênero:</label>
-                <select 
-                  value={selectedGenre}
-                  onChange={(e) => {
-                    handleFilterChange(e.target.value, null, null);
-                  }}
-                  className="border-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 w-full md:min-w-[150px]"
-                >
-                  <option value="">Todos</option>
-                  {genres.map((genre) => (
-                    <option key={genre.id} value={genre.id}>{genre.name}</option>
-                  ))}
-                </select>
-              </div>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col md:flex-row md:flex-nowrap md:items-center gap-3 md:overflow-x-auto">
+                {/* Gênero */}
+                <div className="flex flex-col md:flex-row md:items-center gap-2 flex-shrink-0">
+                  <label className="text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">Gênero:</label>
+                  <select 
+                    value={tempGenre}
+                    onChange={(e) => setTempGenre(e.target.value)}
+                    className="border-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 w-full md:min-w-[150px]"
+                  >
+                    <option value="">Todos</option>
+                    {genres.map((genre) => (
+                      <option key={genre.id} value={genre.id}>{genre.name}</option>
+                    ))}
+                  </select>
+                </div>
 
-              {/* Ano */}
-              <div className="flex flex-col md:flex-row md:items-center gap-2 flex-shrink-0">
-                <label className="text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">Ano:</label>
-                <select 
-                  value={selectedYear}
-                  onChange={(e) => {
-                    handleFilterChange(null, e.target.value, null);
-                  }}
-                  className="border-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 w-full md:min-w-[120px]"
-                >
-                  <option value="">Todos</option>
-                  {Array.from({ length: 100 }, (_, i) => {
-                    const year = new Date().getFullYear() - i;
-                    return (
-                      <option key={year} value={year}>{year}</option>
-                    );
-                  })}
-                </select>
-              </div>
+                {/* Ano */}
+                <div className="flex flex-col md:flex-row md:items-center gap-2 flex-shrink-0">
+                  <label className="text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">Ano:</label>
+                  <select 
+                    value={tempYear}
+                    onChange={(e) => setTempYear(e.target.value)}
+                    className="border-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 w-full md:min-w-[120px]"
+                  >
+                    <option value="">Todos</option>
+                    {Array.from({ length: 100 }, (_, i) => {
+                      const year = new Date().getFullYear() - i;
+                      return (
+                        <option key={year} value={year}>{year}</option>
+                      );
+                    })}
+                  </select>
+                </div>
 
-              {/* País */}
-              <div className="flex flex-col md:flex-row md:items-center gap-2 flex-shrink-0">
-                <label className="text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">País:</label>
-                <select 
-                  value={selectedCountry}
-                  onChange={(e) => {
-                    handleFilterChange(null, null, null, e.target.value);
-                  }}
-                  className="border-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 w-full md:w-[150px]"
-                >
-                  <option value="">Todos</option>
-                  {countries.map((country) => (
-                    <option key={country.iso_3166_1} value={country.iso_3166_1}>
-                      {country.english_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                {/* País */}
+                <div className="flex flex-col md:flex-row md:items-center gap-2 flex-shrink-0">
+                  <label className="text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">País:</label>
+                  <select 
+                    value={tempCountry}
+                    onChange={(e) => setTempCountry(e.target.value)}
+                    className="border-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 w-full md:w-[150px]"
+                  >
+                    <option value="">Todos</option>
+                    {countries.map((country) => (
+                      <option key={country.iso_3166_1} value={country.iso_3166_1}>
+                        {country.english_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              {/* Ordenar por */}
-              <div className="flex flex-col md:flex-row md:items-center gap-2 flex-shrink-0">
-                <label className="text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">Ordenar por:</label>
-                <select 
-                  value={sortBy}
-                  onChange={(e) => {
-                    handleFilterChange(null, null, e.target.value);
-                  }}
-                  className="border-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 w-full md:min-w-[180px]"
-                >
-                  <option value="popularity.desc">Mais Populares</option>
-                  <option value="vote_average.desc">Melhor Avaliados</option>
-                  <option value="release_date.desc">Mais Recentes</option>
-                  <option value="release_date.asc">Mais Antigos</option>
-                  <option value="title.asc">Título (A-Z)</option>
-                  <option value="title.desc">Título (Z-A)</option>
-                </select>
-              </div>
+                {/* Ordenar por */}
+                <div className="flex flex-col md:flex-row md:items-center gap-2 flex-shrink-0">
+                  <label className="text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">Ordenar por:</label>
+                  <select 
+                    value={tempSortBy}
+                    onChange={(e) => setTempSortBy(e.target.value)}
+                    className="border-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 w-full md:min-w-[180px]"
+                  >
+                    <option value="popularity.desc">Mais Populares</option>
+                    <option value="vote_average.desc">Melhor Avaliados</option>
+                    <option value="release_date.desc">Mais Recentes</option>
+                    <option value="release_date.asc">Mais Antigos</option>
+                    <option value="title.asc">Título (A-Z)</option>
+                    <option value="title.desc">Título (Z-A)</option>
+                  </select>
+                </div>
 
-              {/* Botões de filtro (Na Lista e Assistido) */}
-              <div className="flex flex-row md:flex-row gap-2 flex-shrink-0">
-                {/* Botão: Na Lista */}
+                {/* Botões de filtro (Na Lista e Assistido) - Alinhados à direita */}
+                <div className="flex flex-row gap-2 flex-shrink-0 ml-auto">
+                  {/* Botão: Na Lista */}
+                  <button
+                    onClick={() => {
+                      setFilterInList(!filterInList);
+                      setPage(1);
+                    }}
+                    className={`flex items-center justify-center p-2 rounded-lg transition flex-shrink-0 ${
+                      filterInList
+                        ? 'bg-blue-600 dark:bg-blue-500 text-white hover:bg-blue-700 dark:hover:bg-blue-600'
+                        : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
+                    }`}
+                    title="Filtrar filmes na lista"
+                  >
+                    <Bookmark size={18} />
+                  </button>
+
+                  {/* Botão: Assistido */}
+                  <button
+                    onClick={() => {
+                      setFilterWatched(!filterWatched);
+                      setPage(1);
+                    }}
+                    className={`flex items-center justify-center p-2 rounded-lg transition flex-shrink-0 ${
+                      filterWatched
+                        ? 'bg-green-600 dark:bg-green-500 text-white hover:bg-green-700 dark:hover:bg-green-600'
+                        : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
+                    }`}
+                    title="Filtrar filmes assistidos"
+                  >
+                    <Eye size={18} />
+                  </button>
+                </div>
+              </div>
+              
+              {/* Botões de ação: Filtrar e Limpar */}
+              <div className="flex items-center gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
                 <button
-                  onClick={() => {
-                    setFilterInList(!filterInList);
-                    setPage(1);
-                  }}
-                  className={`flex items-center justify-center p-2 rounded-lg transition flex-shrink-0 ${
-                    filterInList
-                      ? 'bg-blue-600 dark:bg-blue-500 text-white hover:bg-blue-700 dark:hover:bg-blue-600'
-                      : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
-                  }`}
-                  title="Filtrar filmes na lista"
+                  type="button"
+                  onClick={applyFilters}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition text-sm font-medium"
                 >
-                  <Bookmark size={18} />
+                  <Filter size={16} />
+                  Filtrar
                 </button>
-
-                {/* Botão: Assistido */}
                 <button
-                  onClick={() => {
-                    setFilterWatched(!filterWatched);
-                    setPage(1);
-                  }}
-                  className={`flex items-center justify-center p-2 rounded-lg transition flex-shrink-0 ${
-                    filterWatched
-                      ? 'bg-green-600 dark:bg-green-500 text-white hover:bg-green-700 dark:hover:bg-green-600'
-                      : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
-                  }`}
-                  title="Filtrar filmes assistidos"
+                  type="button"
+                  onClick={clearFilters}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition text-sm font-medium"
                 >
-                  <Eye size={18} />
+                  <X size={16} />
+                  Limpar Filtros
                 </button>
               </div>
             </div>

@@ -5,7 +5,11 @@ Uma aplicação web moderna para gerenciar sua lista de filmes favoritos, com bu
 ## ✨ Funcionalidades
 
 - **🔐 Autenticação de Usuários**: Sistema completo de login e cadastro com isolamento de dados por usuário
-- **🔍 Busca Inteligente**: Busque filmes por título com debounce para otimizar performance
+- **🔍 Busca Inteligente**: 
+  - Busque filmes por título
+  - Busque por diretor (mostra todos os filmes dirigidos por uma pessoa)
+  - Busque por elenco (mostra todos os filmes onde uma pessoa atuou)
+  - Debounce otimizado (200ms para diretor/elenco, 300ms para filmes)
 - **📋 Gerenciamento de Lista**: Adicione e gerencie seus filmes favoritos
 - **🎲 Sorteador de Filmes**: Sorteie um filme aleatório da sua lista quando não souber o que assistir
 - **🎨 Visualizações Flexíveis**: 
@@ -18,6 +22,7 @@ Uma aplicação web moderna para gerenciar sua lista de filmes favoritos, com bu
   - Filtro por filmes na lista
   - Filtro por filmes assistidos
   - Ordenação por popularidade, avaliação, data de lançamento ou título
+  - Botões de filtro alinhados à direita para melhor organização
 - **📄 Paginação**: Navegação intuitiva com 50 filmes por página
 - **📱 Responsivo e Mobile-First**: 
   - Interface totalmente adaptada para mobile
@@ -244,11 +249,15 @@ watchlist-app/
 ## 🎯 Funcionalidades Detalhadas
 
 ### Busca de Filmes
-- Busca em tempo real com debounce de 500ms
+- Busca em tempo real com debounce otimizado:
+  - 200ms para busca por diretor/elenco
+  - 300ms para busca por título de filme
+- Seleção de tipo de busca via radio buttons (Filme, Diretor, Elenco)
+- Busca por diretor: mostra todos os filmes dirigidos pela pessoa pesquisada
+- Busca por elenco: mostra todos os filmes onde a pessoa atuou
 - Cancelamento automático de requisições sobrepostas
 - Carregamento completo do catálogo (até 500 páginas = 10.000 filmes)
 - Carregamento em lotes paralelos para melhor performance
-- Logs de progresso durante o carregamento
 
 ### Filtros
 - **Gênero**: Filtra por gênero cinematográfico
@@ -422,6 +431,17 @@ Após publicar no Vercel, você pode instalar o app no seu celular:
 - ✅ Constraint UNIQUE composta garante que cada usuário só pode adicionar o mesmo filme uma vez
 - ✅ Índices otimizados para consultas rápidas
 - ✅ Row Level Security (RLS) configurado para isolamento de dados
+
+### Busca e Filtros
+- ✅ Busca por tipo de conteúdo: Filme, Diretor ou Elenco
+- ✅ Radio buttons para seleção de tipo de busca abaixo da barra de busca
+- ✅ Busca por diretor: filtra apenas filmes onde a pessoa é diretor
+- ✅ Busca por elenco: filtra apenas filmes onde a pessoa atuou
+- ✅ Debounce otimizado: 200ms para diretor/elenco, 300ms para filmes
+- ✅ Remoção do filtro de franquia (simplificação da interface)
+- ✅ Remoção do botão "+ Filtros" (interface mais limpa)
+- ✅ Botões "Na Lista" e "Assistido" alinhados à direita
+- ✅ Limpeza de logs de carregamento para melhor performance
 
 ### UX/UI
 - ✅ Modo escuro/claro com toggle
